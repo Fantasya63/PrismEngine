@@ -3,7 +3,7 @@ project(PrismEngine VERSION 0.1.0 LANGUAGES C CXX)
 
 include(FetchContent)
 
-# 1. Fetch SDL3 from GitHub
+
 FetchContent_Declare(
     SDL3
     GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
@@ -22,8 +22,31 @@ set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)  # Disable SDL3 test support libra
 FetchContent_MakeAvailable(SDL3)
 
 
+# KTX
+FetchContent_Declare(
+    KTX
+    GIT_REPOSITORY  https://github.com/KhronosGroup/KTX-Software.git
+    GIT_TAG         v4.4.2
+    GIT_SHALLOW     ON
+)
+
+set(KTX_FEATURE_STATIC_LIB ON CACHE BOOL "" FORCE)
+
+set( KTX_FEATURE_DOC OFF CACHE BOOL "" FORCE)
+set( KTX_FEATURE_JNI OFF CACHE BOOL "" FORCE)
+set( KTX_FEATURE_PY OFF CACHE BOOL "" FORCE)
+set( KTX_FEATURE_TESTS OFF CACHE BOOL "" FORCE)
+set( KTX_FEATURE_TOOLS_CTS OFF CACHE BOOL "" FORCE)
+set( KTX_FEATURE_JS OFF CACHE BOOL "" FORCE)
+set( KTX_FEATURE_TOOLS OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(KTX)
+
+
 find_package(glm REQUIRED)
 find_package(Vulkan 1.4.335 REQUIRED)
+
+include_directories(external/tinyobj)
+
 
 add_library(VulkanCppModule INTERFACE)
 add_library(Vulkan::cppm ALIAS VulkanCppModule)
@@ -49,4 +72,12 @@ target_link_libraries(PrismEngine PRIVATE
     Vulkan::cppm
     glm::glm
     SDL3::SDL3-static # Links the static target provided by FetchContent
+    KTX
 )
+
+# Expose KTX and local headers cleanly
+target_include_directories(PrismEngine PRIVATE
+    ${ktx_SOURCE_DIR}/include
+    ${ktx_SOURCE_DIR}/other_include
+)
+

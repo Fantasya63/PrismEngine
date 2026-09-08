@@ -5,9 +5,10 @@
 int main(int argc, char* argv[])
 {
     AppCreateInfo appInfo {
-        .appName = "Hello World",
-        .argc = argc,
-        .argv = argv
+        .WindowInfo { 1920u, 1080u },
+        .AppName = "Hello World",
+        .Argc = argc,
+        .Argv = argv
     };
 
     Application app(appInfo);
