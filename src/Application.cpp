@@ -1,6 +1,7 @@
 #include "Application.h"
 #include "utils.h"
 
+#include <filesystem>
 
 #define VMA_IMPLEMENTATION
 #include <vma/vk_mem_alloc.h>
@@ -21,6 +22,11 @@ import vulkan_hpp;
 #include <ktx.h>
 #include <ktxvulkan.h>
 
+#include <slang/slang.h>
+#include <slang/slang-com-ptr.h>
+
+const std::filesystem::path shaderSourcePath = "assets/shader.slang";
+
 struct Texture {
 	VmaAllocation allocation{ VK_NULL_HANDLE };
 	VkImage image{ VK_NULL_HANDLE };
@@ -35,7 +41,7 @@ struct Vertex {
 };
 
 typedef uint16_t meshIndex_t; 
-constexpr uint32_t maxFramesInFlight{ 2 };
+
 
 struct ShaderData {
     glm::mat4 projection;
@@ -63,6 +69,11 @@ Application::Application(const AppCreateInfo& info)
     modelVBufferAllocation(VK_NULL_HANDLE),
     vkCommandPool(VK_NULL_HANDLE),
     textures({}),
+    descriptorSetLayoutTex(VK_NULL_HANDLE),
+    descriptorPool( VK_NULL_HANDLE ),
+    descriptorSetTex( VK_NULL_HANDLE ),
+    pipelineLayout( VK_NULL_HANDLE ),
+    pipeline( VK_NULL_HANDLE )
 {
 
 }
@@ -582,6 +593,234 @@ void Application::InitVulkan()
         });
     }
 
+    // Texture Descriptors
+    VkDescriptorBindingFlags descVariableFlag { VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT};
+    VkDescriptorSetLayoutBindingFlagsCreateInfo descBindingFlagsCI {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+        .bindingCount = 1,
+        .pBindingFlags = &descVariableFlag
+    };
+    VkDescriptorSetLayoutBinding descriptorLayoutBindingTex {
+        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .descriptorCount = static_cast<uint32_t>(textures.size()),
+        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+    };
+
+    VkDescriptorSetLayoutCreateInfo descriptorLayoutCI {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .pNext = &descBindingFlagsCI,
+        .bindingCount = 1,
+        .pBindings = &descriptorLayoutBindingTex
+    };
+    chk(vkCreateDescriptorSetLayout(vkDevice, &descriptorLayoutCI, nullptr, &descriptorSetLayoutTex));
+
+    // Descriptor Pool
+    VkDescriptorPoolSize descriptorPoolSize {
+        .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .descriptorCount = static_cast<uint32_t>(textures.size())
+    };
+    VkDescriptorPoolCreateInfo descPoolCI {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .maxSets = 1,
+        .poolSizeCount = 1,
+        .pPoolSizes = &descriptorPoolSize
+    };
+    chk(vkCreateDescriptorPool(vkDevice, &descPoolCI, nullptr, &descriptorPool));
+    
+    uint32_t variableDescCount { static_cast<uint32_t>(textures.size()) };
+    VkDescriptorSetVariableDescriptorCountAllocateInfo descSetVarDescCountAllocInfo {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT,
+        .descriptorSetCount = 1,
+        .pDescriptorCounts = &variableDescCount
+    };
+    VkDescriptorSetAllocateInfo texDescSetAlloc {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .pNext = &descSetVarDescCountAllocInfo,
+        .descriptorPool = descriptorPool,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &descriptorSetLayoutTex
+    };
+    chk(vkAllocateDescriptorSets(vkDevice, &texDescSetAlloc, &descriptorSetTex));
+
+    VkWriteDescriptorSet writeDescSet {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = descriptorSetTex,
+        .dstBinding = 0,
+        .descriptorCount = static_cast<uint32_t>(textureDescriptors.size()),
+        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .pImageInfo = textureDescriptors.data()
+    };
+
+    vkUpdateDescriptorSets(vkDevice, 1, &writeDescSet, 0, nullptr);
+
+    // Init SlangShaderCompiler
+    slang::createGlobalSession(slangGlobalSession.writeRef());
+
+    auto slangTargets { std::to_array<slang::TargetDesc>(
+        {
+            {
+                .format{SLANG_SPIRV},
+                .profile{slangGlobalSession->findProfile("spirv_1_4")}
+            }
+        }
+    )};
+
+    auto slangOptions { std::to_array<slang::CompilerOptionEntry>(
+        {
+            {
+                slang::CompilerOptionName::EmitSpirvDirectly,
+                { slang::CompilerOptionValueKind::Int, 1 }
+            }
+        }
+    )};
+
+    slang::SessionDesc slangSessionDesc{
+        .targets {slangTargets.data()},
+        .targetCount {SlangInt(slangTargets.size())},
+        .defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR,
+        .compilerOptionEntries {slangOptions.data()},
+        .compilerOptionEntryCount {uint32_t (slangOptions.size())}
+    };
+
+    Slang::ComPtr<slang::ISession> slangSession;
+    slangGlobalSession->createSession(slangSessionDesc, slangSession.writeRef());
+
+    Slang::ComPtr<slang::IModule> slangModule {
+        slangSession->loadModuleFromSourceString("triangle", shaderSourcePath.c_str(), nullptr, nullptr)
+    };
+    Slang::ComPtr<ISlangBlob> spirv;
+    slangModule->getTargetCode(0, spirv.writeRef());
+
+    VkShaderModuleCreateInfo shaderModuleCI {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = spirv->getBufferSize(),
+        .pCode = (uint32_t*)spirv->getBufferPointer()
+    };
+    VkShaderModule shaderModule{};
+    chk(vkCreateShaderModule(vkDevice, &shaderModuleCI, nullptr, &shaderModule));
+
+    VkPushConstantRange pushConstantRange {
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .size = sizeof(VkDeviceAddress)
+    };
+    VkPipelineLayoutCreateInfo pipelineLayoutCI {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts = &descriptorSetLayoutTex,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &pushConstantRange
+    };
+    chk(vkCreatePipelineLayout(vkDevice, &pipelineLayoutCI, nullptr, &pipelineLayout));
+
+    VkVertexInputBindingDescription vertexInputBindingDesc {
+        .binding = 0,
+        .stride = sizeof(Vertex),
+        .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
+    };
+
+    std::vector<VkVertexInputAttributeDescription> vertexInputAttributesDesc {
+        { .location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT},
+        { .location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, normal)},
+        { .location = 2, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, uv)},
+    };
+
+    VkPipelineVertexInputStateCreateInfo pipelineVertexInputStateCI {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+        .vertexBindingDescriptionCount = 1,
+        .pVertexBindingDescriptions = &vertexInputBindingDesc,
+        .vertexAttributeDescriptionCount = static_cast<uint32_t>(vertexInputAttributesDesc.size()),
+        .pVertexAttributeDescriptions = vertexInputAttributesDesc.data()
+    };
+
+    VkPipelineInputAssemblyStateCreateInfo pipelineInputAssemblyStateCI {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
+    };
+
+    std::vector<VkPipelineShaderStageCreateInfo> shaderStageCIs {
+        { 
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_VERTEX_BIT,
+            .module = shaderModule, .pName = "main"
+        },
+        { 
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .module = shaderModule, .pName = "main"
+        },
+    };
+
+    VkPipelineViewportStateCreateInfo pipelineViewportStateCI {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        .viewportCount = 1,
+        .scissorCount = 1
+    };
+    std::vector<VkDynamicState> dynamicStates {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR
+    };
+
+    VkPipelineDynamicStateCreateInfo pipelineDynamicStateCI {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+        .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
+        .pDynamicStates = dynamicStates.data()
+    };
+
+    VkPipelineDepthStencilStateCreateInfo pipelineDepthStencilStateCI {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .depthTestEnable = VK_TRUE,
+        .depthWriteEnable = VK_TRUE,
+        .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL
+    };
+
+    VkPipelineRenderingCreateInfo pipelineRenderingCI {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .colorAttachmentCount = 1,
+        .pColorAttachmentFormats = &imageFormat,
+        .depthAttachmentFormat = depthFormat
+    };
+
+    VkPipelineColorBlendAttachmentState blendAttachmentState {
+        .colorWriteMask = 0xF
+    };
+
+    VkPipelineColorBlendStateCreateInfo pipelineColorBlendStateCI {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        .attachmentCount = 1,
+        .pAttachments = &blendAttachmentState
+    };
+
+    VkPipelineRasterizationStateCreateInfo pipelineRasterizationStateCI {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+        .lineWidth = 1.0f
+    };
+
+    VkPipelineMultisampleStateCreateInfo pipelineMultiSampleStateCI {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
+    };
+
+    VkGraphicsPipelineCreateInfo graphicsPipelineCI {
+        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .pNext = &pipelineRenderingCI,
+        .stageCount = static_cast<uint32_t>(shaderStageCIs.size()),
+        .pStages = shaderStageCIs.data(),
+        .pVertexInputState = &pipelineVertexInputStateCI,
+        .pInputAssemblyState = &pipelineInputAssemblyStateCI,
+        .pViewportState = &pipelineViewportStateCI,
+        .pRasterizationState = &pipelineRasterizationStateCI,
+        .pMultisampleState = &pipelineMultiSampleStateCI,
+        .pDepthStencilState = &pipelineDepthStencilStateCI,
+        .pColorBlendState = &pipelineColorBlendStateCI,
+        .pDynamicState = &pipelineDynamicStateCI,
+        .layout = pipelineLayout
+    };
+    chk(vkCreateGraphicsPipelines(vkDevice, VK_NULL_HANDLE, 1, &graphicsPipelineCI, nullptr, &pipeline));
+}
+
+void Application::MainLoop()
+{
+    
 }
 
 void Application::CleanUP()

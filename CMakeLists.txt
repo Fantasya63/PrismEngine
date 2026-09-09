@@ -51,6 +51,32 @@ include_directories(external/tinyobj)
 add_library(VulkanCppModule INTERFACE)
 add_library(Vulkan::cppm ALIAS VulkanCppModule)
 
+find_path(SLANG_INCLUDE_DIR 
+    NAMES slang/slang.h slang.h
+    HINTS 
+        $ENV{VULKAN_SDK}/include
+        ${Vulkan_INCLUDE_DIRS}
+)
+
+find_library(SLANG_LIBRARY 
+    NAMES slang slang-lib
+    HINTS 
+        $ENV{VULKAN_SDK}/lib
+        $ENV{VULKAN_SDK}/Lib
+        ${Vulkan_LIBRARIES}
+)
+
+if(NOT SLANG_INCLUDE_DIR OR NOT SLANG_LIBRARY)
+    message(FATAL_ERROR "Slang was not found in Vulkan SDK!\nChecked SDK Path: $ENV{VULKAN_SDK}")
+endif()
+
+add_library(Slang::Slang INTERFACE IMPORTED)
+target_include_directories(Slang::Slang INTERFACE ${SLANG_INCLUDE_DIR})
+target_link_libraries(Slang::Slang INTERFACE ${SLANG_LIBRARY})
+
+
+
+
 target_link_libraries(VulkanCppModule INTERFACE Vulkan::Vulkan)
 target_compile_definitions(VulkanCppModule
     INTERFACE VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1
@@ -73,6 +99,7 @@ target_link_libraries(PrismEngine PRIVATE
     glm::glm
     SDL3::SDL3-static # Links the static target provided by FetchContent
     KTX
+    Slang::Slang
 )
 
 # Expose KTX and local headers cleanly

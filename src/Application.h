@@ -1,6 +1,8 @@
 #pragma once
 
 #include <vma/vk_mem_alloc.h>
+#include <slang/slang.h>
+#include <slang/slang-com-ptr.h>
 
 
 #if defined(__INTELLISENSE__) || !defined(USE_CPP20_MODULES)
@@ -8,6 +10,8 @@
 #else
 import vulkan_hpp;
 #endif
+
+constexpr uint32_t maxFramesInFlight{ 2 };
 
 struct AppWindowInfo
 {
@@ -56,6 +60,9 @@ private:
     VkImage vkDepthImage;
     VkImageView vkDepthImageView;
 
+    VkPipelineLayout pipelineLayout{ VK_NULL_HANDLE };
+    VkPipeline pipeline{ VK_NULL_HANDLE };
+
     // Model
     VkBuffer modelVBuffer{ VK_NULL_HANDLE };
     VmaAllocation modelVBufferAllocation{ VK_NULL_HANDLE };
@@ -73,4 +80,11 @@ private:
 
     // Textures
     std::array<Texture, 3> textures {};
+
+    VkDescriptorSetLayout descriptorSetLayoutTex{ VK_NULL_HANDLE };
+    VkDescriptorPool descriptorPool{ VK_NULL_HANDLE };
+    VkDescriptorSet descriptorSetTex{ VK_NULL_HANDLE };
+
+    // Slang
+    Slang::ComPtr<slang::IGlobalSession> slangGlobalSession;
 };
