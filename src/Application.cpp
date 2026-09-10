@@ -10,7 +10,13 @@
 #include <cstring>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
+
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
+
 #include <tiny_obj_loader.h>
 
 #if defined(__INTELLISENSE__) || !defined(USE_CPP20_MODULES)
@@ -25,7 +31,30 @@ import vulkan_hpp;
 #include <slang/slang.h>
 #include <slang/slang-com-ptr.h>
 
-const std::filesystem::path shaderSourcePath = "assets/shader.slang";
+#include <type_traits>
+
+typedef uint16_t meshIndex_t; 
+
+// Compile-time helper function
+constexpr VkIndexType getVkIndexType() {
+    static_assert(
+        std::is_same_v<meshIndex_t, uint16_t> || 
+        std::is_same_v<meshIndex_t, uint32_t> || 
+        std::is_same_v<meshIndex_t, uint8_t>, 
+        "meshIndex_t must be uint8_t, uint16_t, or uint32_t for Vulkan index buffers!"
+    );
+
+    if constexpr (std::is_same_v<meshIndex_t, uint16_t>) {
+        return VK_INDEX_TYPE_UINT16;
+    } else if constexpr (std::is_same_v<meshIndex_t, uint32_t>) {
+        return VK_INDEX_TYPE_UINT32;
+    } else if constexpr (std::is_same_v<meshIndex_t, uint8_t>) {
+        // Requires VK_EXT_index_type_uint8 extension
+        return VK_INDEX_TYPE_UINT8_EXT;
+    }
+}
+
+constexpr VkIndexType meshIndexVkType = getVkIndexType();
 
 struct Texture {
 	VmaAllocation allocation{ VK_NULL_HANDLE };
@@ -34,13 +63,21 @@ struct Texture {
 	VkSampler sampler{ VK_NULL_HANDLE };
 };
 
+struct CameraData {
+    glm::vec3 Position { 0.0f, 0.0f, 0.0f };
+    float FOV { 45.0f };
+    float Near = { 0.1f };
+    float Far = { 100.0f };
+};
+
+
+
 struct Vertex {
     glm::vec3 pos;
     glm::vec3 normal;
     glm::vec2 uv;
 };
 
-typedef uint16_t meshIndex_t; 
 
 
 struct ShaderData {
@@ -58,6 +95,37 @@ struct ShaderDataBuffer {
 	VkDeviceAddress deviceAddress{};
 };
 
+
+namespace {
+    SDL_Window* window;
+
+
+    const std::filesystem::path shaderSourcePath = "assets/shader.slang";
+    bool updateSwapchain{ false };
+    uint32_t imageIndex{ 0 };
+
+    CameraData camData {.FOV = 45.0f, .Near = 0.1f, .Far = 100.0f};
+    
+    glm::vec3 objectRotations[3]{};
+    VkDeviceSize vertexBufferSize;
+    VkDeviceSize indexBufferSize;
+    VkDeviceSize indexCount;
+    uint32_t deviceIndex{0};
+
+    std::vector<VkPhysicalDevice> devices;
+    VkSurfaceCapabilitiesKHR surfaceCaps{};
+    VkSwapchainCreateInfoKHR swapchainCreateInfo;
+    uint32_t swapChainImageCount {0};
+    const VkFormat imageFormat { VK_FORMAT_B8G8R8A8_SRGB };
+    VkSemaphoreCreateInfo semaphoreCreateInfo;
+    VkImageCreateInfo depthImageCreateInfo;
+    VkFormat depthFormat { VK_FORMAT_UNDEFINED };
+    VkShaderModule shaderModule{};
+
+}
+
+
+
 Application::Application(const AppCreateInfo& info)
     : createInfo(info),
     vkInstance(VK_NULL_HANDLE),
@@ -73,7 +141,8 @@ Application::Application(const AppCreateInfo& info)
     descriptorPool( VK_NULL_HANDLE ),
     descriptorSetTex( VK_NULL_HANDLE ),
     pipelineLayout( VK_NULL_HANDLE ),
-    pipeline( VK_NULL_HANDLE )
+    pipeline( VK_NULL_HANDLE ),
+    frameIndex( 0 )
 {
 
 }
@@ -166,10 +235,10 @@ void Application::InitVulkan()
     // Device 
     uint32_t deviceCount{0};
     chk(vkEnumeratePhysicalDevices(vkInstance, &deviceCount, nullptr));
-    std::vector<VkPhysicalDevice> devices(deviceCount);
+    devices.resize(deviceCount);
     chk(vkEnumeratePhysicalDevices(vkInstance, &deviceCount, devices.data()));
 
-    uint32_t deviceIndex{0};
+   
     if (createInfo.Argc > 1)
     {
         deviceIndex = std::atoi(createInfo.Argv[1]);
@@ -261,7 +330,7 @@ void Application::InitVulkan()
     chk(vmaCreateAllocator(&allocatorCreateInfo, &vkAllocator));
 
     // Window
-    SDL_Window* window = SDL_CreateWindow(
+    window = SDL_CreateWindow(
         createInfo.AppName,
         createInfo.WindowInfo.Width, createInfo.WindowInfo.Height,
         SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE
@@ -269,7 +338,6 @@ void Application::InitVulkan()
 
     chk(SDL_Vulkan_CreateSurface(window, vkInstance, nullptr, &vkSurface));
 
-    VkSurfaceCapabilitiesKHR surfaceCaps{};
     chk(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(devices[deviceIndex], vkSurface, &surfaceCaps));
 
     // Swapchain
@@ -282,8 +350,8 @@ void Application::InitVulkan()
         };
     }
 
-    const VkFormat imageFormat { VK_FORMAT_B8G8R8A8_SRGB };
-    VkSwapchainCreateInfoKHR swapchainCreateInfo {
+    
+    swapchainCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
         .surface = vkSurface,
         .minImageCount = surfaceCaps.minImageCount,
@@ -298,14 +366,14 @@ void Application::InitVulkan()
     };
     chk(vkCreateSwapchainKHR(vkDevice, &swapchainCreateInfo, nullptr, &vkSwapChain));
 
-    uint32_t swapChainImageCount {0};
+    
     chk(vkGetSwapchainImagesKHR(vkDevice, vkSwapChain, &swapChainImageCount, nullptr));
     swapchainImages.resize(swapChainImageCount);
     chk(vkGetSwapchainImagesKHR(vkDevice, vkSwapChain, &swapChainImageCount, swapchainImages.data()));
     swapchainImageViews.resize(swapChainImageCount);
 
     std::vector<VkFormat> depthFormatList { VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT };
-    VkFormat depthFormat { VK_FORMAT_UNDEFINED };
+    
     for (VkFormat& format : depthFormatList)
     {
         VkFormatProperties2 formatProperties {.sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2};
@@ -317,7 +385,7 @@ void Application::InitVulkan()
         }
     }
 
-    VkImageCreateInfo depthImageCreateInfo {
+    depthImageCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = VK_IMAGE_TYPE_2D,
         .format = depthFormat,
@@ -350,7 +418,7 @@ void Application::InitVulkan()
     std::vector<tinyobj::material_t> materials;
     chk(tinyobj::LoadObj(&tinyObjAttrib, &shapes, &materials, nullptr, nullptr, "asses/suzanne.obj"));
 
-    const VkDeviceSize indexCount {shapes[0].mesh.indices.size()};
+    indexCount = {shapes[0].mesh.indices.size()};
     std::vector<Vertex> vertices{};
     std::vector<meshIndex_t> indices{};
 
@@ -367,8 +435,8 @@ void Application::InitVulkan()
     }
 
     // Upload model data to gpu
-    VkDeviceSize vertexBufferSize { sizeof(Vertex) * vertices.size() };
-    VkDeviceSize indexBufferSize {sizeof(meshIndex_t) * indices.size()};
+    vertexBufferSize =  sizeof(Vertex) * vertices.size() ;
+    indexBufferSize = sizeof(meshIndex_t) * indices.size();
     VkBufferCreateInfo modelBufferCreateInfo {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = vertexBufferSize + indexBufferSize,
@@ -407,7 +475,7 @@ void Application::InitVulkan()
         shaderDataBuffers[i].deviceAddress = vkGetBufferDeviceAddress(vkDevice, &uBufferDeviceAddressInfo);
     }
 
-    VkSemaphoreCreateInfo semaphoreCreateInfo {
+    semaphoreCreateInfo =  {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
     };
     VkFenceCreateInfo fenceCreateInfo {
@@ -696,7 +764,7 @@ void Application::InitVulkan()
         .codeSize = spirv->getBufferSize(),
         .pCode = (uint32_t*)spirv->getBufferPointer()
     };
-    VkShaderModule shaderModule{};
+   
     chk(vkCreateShaderModule(vkDevice, &shaderModuleCI, nullptr, &shaderModule));
 
     VkPushConstantRange pushConstantRange {
@@ -820,10 +888,326 @@ void Application::InitVulkan()
 
 void Application::MainLoop()
 {
-    
+    uint64_t lastTime { SDL_GetTicks()};
+    bool exitProgram { false };
+
+    while (!exitProgram)
+    {
+        // Wait on Fence
+        chk(vkWaitForFences(vkDevice, 1, &fences[frameIndex], true, UINT64_MAX));
+        chk(vkResetFences(vkDevice, 1, &fences[frameIndex]));
+
+        // Acquire Next Image
+        chkSwapchain(vkAcquireNextImageKHR(vkDevice, vkSwapChain, UINT64_MAX, imageAcquiredSemaphores[frameIndex], VK_NULL_HANDLE, &imageIndex), &updateSwapchain);
+
+        // Update Shader Data
+        shaderData.projection = glm::perspective(camData.FOV, (float)createInfo.WindowInfo.Width / (float)createInfo.WindowInfo.Height, camData.Near, camData.Far);
+        shaderData.view = glm::translate(glm::mat4(1.0f), -camData.Position);
+
+        for (auto i = 0; i < 3; i++)
+        {
+            auto instancePos = glm::vec3((float) (i - 1) * 3.0f, 0.0f, 0.0f );
+            shaderData.model[i] = glm::translate(glm::mat4(1.0f), instancePos) * glm::mat4_cast(glm::quat(objectRotations[i]));
+        }
+
+        memcpy(shaderDataBuffers[frameIndex].allocationInfo.pMappedData, &shaderData, sizeof(shaderData));
+
+        // Record Command Buffer
+        // - Reset
+        auto commandBuffer = commandBuffers[frameIndex];
+        chk(vkResetCommandBuffer(commandBuffer, 0));
+
+        // - Start Recording commands
+        VkCommandBufferBeginInfo commandBufferBegInfo {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+        };
+        chk(vkBeginCommandBuffer(commandBuffer, &commandBufferBegInfo));
+
+        // - Create Image Barriers
+        std::array<VkImageMemoryBarrier2, 2> outputBarriers {
+            VkImageMemoryBarrier2 {
+                .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+                .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .srcAccessMask = 0,
+                .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .newLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+                .image = swapchainImages[imageIndex],
+                .subresourceRange {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = 1, .layerCount = 1}
+            },
+            VkImageMemoryBarrier2 {
+                .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+                .srcStageMask = VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                .dstStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+                .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .newLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+                .subresourceRange {.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT, .levelCount = 1, .layerCount = 1}
+            }
+        };
+
+        VkDependencyInfo barrierDependencyInfo {
+            .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+            .imageMemoryBarrierCount = 2,
+            .pImageMemoryBarriers = outputBarriers.data()
+        };
+
+        vkCmdPipelineBarrier2(commandBuffer, &barrierDependencyInfo);
+
+        // - Dynamic Rendering
+        VkRenderingAttachmentInfo colorAttachmentInfo {
+            .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+            .imageView = swapchainImageViews[imageIndex],
+            .imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .clearValue { .color = {0.0f, 0.0f, 0.2f, 1.0f,}}
+        };
+
+        VkRenderingAttachmentInfo depthAttachmentInfo {
+            .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+            .imageView = vkDepthImageView,
+            .imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .clearValue {.depthStencil {1.0f, 0}}
+        };
+
+        VkRenderingInfo renderingInfo {
+            .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+            .renderArea { .extent{.width { static_cast<uint32_t>(createInfo.WindowInfo.Width) }, .height { static_cast<uint32_t>(createInfo.WindowInfo.Width)}} },
+            .layerCount = 1,
+            .colorAttachmentCount = 1,
+            .pColorAttachments = &colorAttachmentInfo,
+            .pDepthAttachment = &depthAttachmentInfo
+        };
+
+        // - Start Render Pass
+        vkCmdBeginRendering(commandBuffer, &renderingInfo);
+
+        // - Viewport
+        VkViewport viewport {
+            .width { static_cast<float>(createInfo.WindowInfo.Width) }, .height {static_cast<float>(createInfo.WindowInfo.Height)},
+            .minDepth { 0.0f },
+            .maxDepth { 1.0f }
+        };
+        vkCmdSetViewport(commandBuffer, 0, 1, &viewport );
+        VkRect2D scissor { .extent {.width {static_cast<uint32_t>(createInfo.WindowInfo.Width)}, .height { static_cast<uint32_t>(createInfo.WindowInfo.Height) }} };
+        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+        // - 3D
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+        VkDeviceSize vOffset { 0 };
+        vkCmdBindDescriptorSets ( commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSetTex, 0, nullptr);
+        vkCmdBindVertexBuffers (commandBuffer, 0, 1, &modelVBuffer, &vOffset);
+        vkCmdBindIndexBuffer(commandBuffer, modelVBuffer, vertexBufferSize,  meshIndexVkType);
+
+        vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &shaderDataBuffers[frameIndex].deviceAddress);
+
+        vkCmdDrawIndexed(commandBuffer, indexCount, 3, 0, 0, 0);
+        
+        // - End Render Pass
+        vkCmdEndRendering(commandBuffer);
+
+        // - transition the swapchain image that we just used as an attachment (to output color values) to a layout required for presentation
+        VkImageMemoryBarrier2 barrierPresent {
+            .sType { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 },
+            .srcStageMask { VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT },
+            .srcAccessMask { VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT },
+            .dstStageMask { VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT },
+            .dstAccessMask { 0 },
+            .oldLayout { VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL },
+            .newLayout { VK_IMAGE_LAYOUT_PRESENT_SRC_KHR },
+            .image { swapchainImages[imageIndex]},
+            .subresourceRange { .aspectMask {VK_IMAGE_ASPECT_COLOR_BIT}, .levelCount { 1 }, .layerCount { 1 } }
+        };
+
+        VkDependencyInfo barrierPresentDependencyInfo {
+            .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+            .imageMemoryBarrierCount = 1,
+            .pImageMemoryBarriers = &barrierPresent
+        };
+
+        vkCmdPipelineBarrier2(commandBuffer, &barrierPresentDependencyInfo);
+
+        // - End Recording Commands
+        vkEndCommandBuffer(commandBuffer);
+
+        // Submit Command Buffer
+        VkSemaphoreSubmitInfo waitSemaphoreSubmitInfo {
+            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+            .semaphore = imageAcquiredSemaphores[frameIndex],
+            .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT
+        };
+
+        VkCommandBufferSubmitInfo vkCommandBufferSubmitInfo {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+            .commandBuffer = commandBuffer
+        };
+
+        VkSemaphoreSubmitInfo signalSemaphoreSubmitInfo {
+            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+            .semaphore = renderCompleteSemaphores[frameIndex],
+            .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        };
+
+        VkSubmitInfo2 submitInfo {
+            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+            .waitSemaphoreInfoCount = 1,
+            .pWaitSemaphoreInfos = &waitSemaphoreSubmitInfo,
+            .commandBufferInfoCount = 1,
+            .pCommandBufferInfos = &vkCommandBufferSubmitInfo,
+            .signalSemaphoreInfoCount = 1,
+            .pSignalSemaphoreInfos = &signalSemaphoreSubmitInfo
+        };
+        chk(vkQueueSubmit2(vkQueue, 1, &submitInfo, fences[frameIndex]));
+        frameIndex = (frameIndex + 1) % maxFramesInFlight;
+
+        // Present Image
+        VkPresentInfoKHR presentInfo {
+            .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            .waitSemaphoreCount = 1,
+            .pWaitSemaphores = &renderCompleteSemaphores[imageIndex],
+            .swapchainCount = 1,
+            .pSwapchains = &vkSwapChain,
+            .pImageIndices = &imageIndex
+        };
+
+        chkSwapchain(vkQueuePresentKHR(vkQueue, &presentInfo), &updateSwapchain);
+
+        // Poll Events
+        float elapsedTime { SDL_GetTicks() - lastTime / 1000.0f };
+        lastTime = SDL_GetTicks();
+
+        for (SDL_Event event; SDL_PollEvent(&event); )
+        {
+            if (event.type == SDL_EVENT_QUIT)
+            {
+                exitProgram = true;
+                break;
+            }
+
+            // Rotate the selected object with mouse drag
+            if (event.type == SDL_EVENT_MOUSE_MOTION)
+            {
+                if (event.button.button == SDL_BUTTON_LEFT)
+                {
+                    objectRotations[shaderData.selected].x -= (float)event.motion.yrel * elapsedTime;
+                    objectRotations[shaderData.selected].y += (float)event.motion.xrel * elapsedTime;
+                }
+            }
+
+            if (event.type == SDL_EVENT_MOUSE_WHEEL) {
+                camData.Position.z += (float)event.wheel.y * elapsedTime * 10.0f;
+            }
+
+            // Select active model instance
+            if (event.type == SDL_EVENT_KEY_DOWN) {
+                if (event.key.key == SDLK_PLUS || event.key.key == SDLK_KP_PLUS) {
+                    shaderData.selected = (shaderData.selected < 2) ? shaderData.selected + 1 : 0;
+                }
+                if (event.key.key == SDLK_MINUS || event.key.key == SDLK_KP_MINUS) {
+                    shaderData.selected = (shaderData.selected > 0) ? shaderData.selected - 1 : 2;
+                }
+            }
+
+            // Window resize
+            if (event.type == SDL_EVENT_WINDOW_RESIZED) {
+                updateSwapchain = true;
+            }
+        }
+
+        if (updateSwapchain)
+        {
+            updateSwapchain = false;
+            chk(vkDeviceWaitIdle(vkDevice));
+            chk(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(devices[deviceIndex], vkSurface, &surfaceCaps));
+            swapchainCreateInfo.oldSwapchain = vkSwapChain;
+            swapchainCreateInfo.imageExtent = { .width = static_cast<uint32_t>(createInfo.WindowInfo.Width), .height = static_cast<uint32_t>(createInfo.WindowInfo.Height) };
+            chk(vkCreateSwapchainKHR(vkDevice, &swapchainCreateInfo, nullptr, &vkSwapChain));
+            for (auto i = 0; i < swapChainImageCount; i++) {
+                vkDestroyImageView(vkDevice, swapchainImageViews[i], nullptr);
+            }
+            chk(vkGetSwapchainImagesKHR(vkDevice, vkSwapChain, &swapChainImageCount, nullptr));
+            swapchainImages.resize(swapChainImageCount);
+            chk(vkGetSwapchainImagesKHR(vkDevice, vkSwapChain, &swapChainImageCount, swapchainImages.data()));
+            swapchainImageViews.resize(swapChainImageCount);
+            for (auto i = 0; i < swapChainImageCount; i++) {
+                VkImageViewCreateInfo viewCI{
+                    .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                    .image = swapchainImages[i],
+                    .viewType = VK_IMAGE_VIEW_TYPE_2D,
+                    .format = imageFormat,
+                    .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = 1, .layerCount = 1}
+                };
+                chk(vkCreateImageView(vkDevice, &viewCI, nullptr, &swapchainImageViews[i]));
+            }
+            for (auto& semaphore : renderCompleteSemaphores) {
+                vkDestroySemaphore(vkDevice, semaphore, nullptr);
+            }
+            renderCompleteSemaphores.resize(swapChainImageCount);
+            for (auto& semaphore : renderCompleteSemaphores) {
+                chk(vkCreateSemaphore(vkDevice, &semaphoreCreateInfo, nullptr, &semaphore));
+            }   
+            vkDestroySwapchainKHR(vkDevice, swapchainCreateInfo.oldSwapchain, nullptr);
+            vmaDestroyImage(vkAllocator, vkDepthImage, vkDepthImageAllocation);
+            vkDestroyImageView(vkDevice, vkDepthImageView, nullptr);
+            depthImageCreateInfo.extent = { .width = static_cast<uint32_t>(createInfo.WindowInfo.Width), .height = static_cast<uint32_t>(createInfo.WindowInfo.Height), .depth = 1 };
+            VmaAllocationCreateInfo allocCI{
+                .flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+                .usage = VMA_MEMORY_USAGE_AUTO
+            };
+            chk(vmaCreateImage(vkAllocator, &depthImageCreateInfo, &allocCI, &vkDepthImage, &vkDepthImageAllocation, nullptr));
+            VkImageViewCreateInfo viewCI{
+                .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                .image = vkDepthImage,
+                .viewType = VK_IMAGE_VIEW_TYPE_2D,
+                .format = depthFormat,
+                .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT, .levelCount = 1, .layerCount = 1 }
+            };
+            chk(vkCreateImageView(vkDevice, &viewCI, nullptr, &vkDepthImageView));
+        }
+    }
 }
 
 void Application::CleanUP()
 {
+    chk(vkDeviceWaitIdle(vkDevice));
 
+    for (auto i = 0; i < maxFramesInFlight; i++) {
+		vkDestroyFence(vkDevice, fences[i], nullptr);
+		vkDestroySemaphore(vkDevice, imageAcquiredSemaphores[i], nullptr);
+		vmaDestroyBuffer(vkAllocator, shaderDataBuffers[i].buffer, shaderDataBuffers[i].allocation);
+	}
+	for (auto i = 0; i < renderCompleteSemaphores.size(); i++) {
+		vkDestroySemaphore(vkDevice, renderCompleteSemaphores[i], nullptr);
+	}
+	vmaDestroyImage(vkAllocator, vkDepthImage, vkDepthImageAllocation);
+	vkDestroyImageView(vkDevice, vkDepthImageView, nullptr);
+	for (auto i = 0; i < swapchainImageViews.size(); i++) {
+		vkDestroyImageView(vkDevice, swapchainImageViews[i], nullptr);
+	}
+	vmaDestroyBuffer(vkAllocator, modelVBuffer, modelVBufferAllocation);
+	for (auto i = 0; i < textures.size(); i++) {
+		vkDestroyImageView(vkDevice, textures[i].view, nullptr);
+		vkDestroySampler(vkDevice, textures[i].sampler, nullptr);
+		vmaDestroyImage(vkAllocator, textures[i].image, textures[i].allocation);
+	}
+	vkDestroyDescriptorSetLayout(vkDevice, descriptorSetLayoutTex, nullptr);
+	vkDestroyDescriptorPool(vkDevice, descriptorPool, nullptr);
+	vkDestroyPipelineLayout(vkDevice, pipelineLayout, nullptr);
+	vkDestroyPipeline(vkDevice, pipeline, nullptr);
+	vkDestroySwapchainKHR(vkDevice, vkSwapChain, nullptr);
+	vkDestroySurfaceKHR(vkInstance, vkSurface, nullptr);
+	vkDestroyCommandPool(vkDevice, vkCommandPool, nullptr);
+	vkDestroyShaderModule(vkDevice, shaderModule, nullptr);
+	vmaDestroyAllocator(vkAllocator);
+	SDL_DestroyWindow(window);
+	SDL_QuitSubSystem(SDL_INIT_VIDEO);
+	SDL_Quit();
+	vkDestroyDevice(vkDevice, nullptr);
+	vkDestroyInstance(vkInstance, nullptr);
 }

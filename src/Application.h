@@ -87,4 +87,6 @@ private:
 
     // Slang
     Slang::ComPtr<slang::IGlobalSession> slangGlobalSession;
+
+    uint32_t frameIndex{ 0 };
 };
