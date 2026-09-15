@@ -1,5 +1,6 @@
 #pragma once
 
+#include <glm/glm.hpp>
 #include <vma/vk_mem_alloc.h>
 #include <slang/slang.h>
 #include <slang/slang-com-ptr.h>
@@ -28,9 +29,30 @@ struct AppCreateInfo
     const char* const* Argv;
 };
 
-typedef ShaderDataBuffer;
-typedef VkSemaphore;
-typedef Texture;
+
+
+struct ShaderData {
+    glm::mat4 projection;
+    glm::mat4 view;
+    glm::mat4 model[3];
+    glm::vec4 lightPos{ 0.0f, -10.0f, 10.0f, 0.0f };
+    uint32_t selected{ 1 };
+};
+
+struct ShaderDataBuffer {
+    VmaAllocation allocation{ VK_NULL_HANDLE };
+    VmaAllocationInfo allocationInfo{};
+    VkBuffer buffer{ VK_NULL_HANDLE };
+    VkDeviceAddress deviceAddress{};
+};
+
+struct Texture {
+    VmaAllocation allocation{ VK_NULL_HANDLE };
+    VkImage image{ VK_NULL_HANDLE };
+    VkImageView view{ VK_NULL_HANDLE };
+    VkSampler sampler{ VK_NULL_HANDLE };
+};
+
 
 class Application
 {
