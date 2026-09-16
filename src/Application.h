@@ -30,14 +30,6 @@ struct AppCreateInfo
 };
 
 
-<<<<<<< HEAD
-struct Texture {
-	VmaAllocation allocation{ VK_NULL_HANDLE };
-	VkImage image{ VK_NULL_HANDLE };
-	VkImageView view{ VK_NULL_HANDLE };
-	VkSampler sampler{ VK_NULL_HANDLE };
-};
-=======
 
 struct ShaderData {
     glm::mat4 projection;
@@ -61,7 +53,6 @@ struct Texture {
     VkSampler sampler{ VK_NULL_HANDLE };
 };
 
->>>>>>> 6b910a2317cdb9315359c4fb432ed56412077df3
 
 class Application
 {

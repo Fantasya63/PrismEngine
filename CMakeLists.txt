@@ -101,24 +101,13 @@ add_executable(PrismEngine
     src/main.cpp
     src/Application.cpp
     vendor/tinyobj/tiny_obj_loader.cc
+    vendor/tinyobj/tiny_obj_loader.cc
 )
 set_target_properties(PrismEngine PROPERTIES CXX_STANDARD 20)
 
 target_compile_definitions(PrismEngine PRIVATE VULKAN_HPP_NO_EXCEPTIONS)
 target_compile_definitions(PrismEngine PRIVATE "VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS")
-<<<<<<< HEAD
 
-
-target_link_libraries(PrismEngine PRIVATE 
-    Vulkan::cppm
-    glm::glm
-    SDL3::SDL3-static # Links the static target provided by FetchContent
-    ktx
-    Slang::Slang
-)
-=======
-target_compile_definitions(PrismEngine PRIVATE TINYOBJ_NO_FAST_FLOAT)
->>>>>>> 6b910a2317cdb9315359c4fb432ed56412077df3
 
 # Expose KTX and local headers cleanly
 target_include_directories(PrismEngine PRIVATE

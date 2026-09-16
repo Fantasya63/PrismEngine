@@ -57,10 +57,7 @@ constexpr VkIndexType getVkIndexType() {
 
 constexpr VkIndexType meshIndexVkType = getVkIndexType();
 
-<<<<<<< HEAD
 
-=======
->>>>>>> 6b910a2317cdb9315359c4fb432ed56412077df3
 struct CameraData {
     glm::vec3 Position { 0.0f, 0.0f, 0.0f };
     float FOV { 45.0f };
@@ -105,12 +102,9 @@ namespace {
     VkFormat depthFormat { VK_FORMAT_UNDEFINED };
     VkShaderModule shaderModule{};
 
-<<<<<<< HEAD
     std::array<ShaderDataBuffer, maxFramesInFlight> shaderDataBuffers;
     std::array<VkCommandBuffer, maxFramesInFlight> commandBuffers; 
-=======
     ShaderData  shaderData{};
->>>>>>> 6b910a2317cdb9315359c4fb432ed56412077df3
 }
 
 
