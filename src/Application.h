@@ -28,9 +28,13 @@ struct AppCreateInfo
     const char* const* Argv;
 };
 
-typedef ShaderDataBuffer;
-typedef VkSemaphore;
-typedef Texture;
+
+struct Texture {
+	VmaAllocation allocation{ VK_NULL_HANDLE };
+	VkImage image{ VK_NULL_HANDLE };
+	VkImageView view{ VK_NULL_HANDLE };
+	VkSampler sampler{ VK_NULL_HANDLE };
+};
 
 class Application
 {
@@ -67,9 +71,6 @@ private:
     VkBuffer modelVBuffer{ VK_NULL_HANDLE };
     VmaAllocation modelVBufferAllocation{ VK_NULL_HANDLE };
     
-    std::array<ShaderDataBuffer, maxFramesInFlight> shaderDataBuffers;
-    std::array<VkCommandBuffer, maxFramesInFlight> commandBuffers; 
-
     std::array<VkFence, maxFramesInFlight> fences;
     std::array<VkSemaphore, maxFramesInFlight> imageAcquiredSemaphores;
 

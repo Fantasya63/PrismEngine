@@ -24,7 +24,7 @@ FetchContent_MakeAvailable(SDL3)
 
 # KTX
 FetchContent_Declare(
-    KTX
+    ktx
     GIT_REPOSITORY  https://github.com/KhronosGroup/KTX-Software.git
     GIT_TAG         v4.4.2
     GIT_SHALLOW     ON
@@ -87,6 +87,7 @@ target_compile_definitions(VulkanCppModule
 add_executable(PrismEngine
     src/main.cpp
     src/Application.cpp
+    vendor/tinyobj/tiny_obj_loader.cc
 )
 set_target_properties(PrismEngine PROPERTIES CXX_STANDARD 20)
 
@@ -98,7 +99,7 @@ target_link_libraries(PrismEngine PRIVATE
     Vulkan::cppm
     glm::glm
     SDL3::SDL3-static # Links the static target provided by FetchContent
-    KTX
+    ktx
     Slang::Slang
 )
 
@@ -106,5 +107,6 @@ target_link_libraries(PrismEngine PRIVATE
 target_include_directories(PrismEngine PRIVATE
     ${ktx_SOURCE_DIR}/include
     ${ktx_SOURCE_DIR}/other_include
+    vendor/tinyobj
 )
 

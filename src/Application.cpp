@@ -56,12 +56,6 @@ constexpr VkIndexType getVkIndexType() {
 
 constexpr VkIndexType meshIndexVkType = getVkIndexType();
 
-struct Texture {
-	VmaAllocation allocation{ VK_NULL_HANDLE };
-	VkImage image{ VK_NULL_HANDLE };
-	VkImageView view{ VK_NULL_HANDLE };
-	VkSampler sampler{ VK_NULL_HANDLE };
-};
 
 struct CameraData {
     glm::vec3 Position { 0.0f, 0.0f, 0.0f };
@@ -116,12 +110,14 @@ namespace {
     VkSurfaceCapabilitiesKHR surfaceCaps{};
     VkSwapchainCreateInfoKHR swapchainCreateInfo;
     uint32_t swapChainImageCount {0};
-    const VkFormat imageFormat { VK_FORMAT_B8G8R8A8_SRGB };
+    VkFormat imageFormat { VK_FORMAT_B8G8R8A8_SRGB };
     VkSemaphoreCreateInfo semaphoreCreateInfo;
     VkImageCreateInfo depthImageCreateInfo;
     VkFormat depthFormat { VK_FORMAT_UNDEFINED };
     VkShaderModule shaderModule{};
 
+    std::array<ShaderDataBuffer, maxFramesInFlight> shaderDataBuffers;
+    std::array<VkCommandBuffer, maxFramesInFlight> commandBuffers; 
 }
 
 
@@ -252,6 +248,38 @@ void Application::InitVulkan()
     
     Print(std::format("Selected Device: {}", deviceProperties.properties.deviceName));
 
+
+    // Window
+    window = SDL_CreateWindow(
+        createInfo.AppName,
+        createInfo.WindowInfo.Width, createInfo.WindowInfo.Height,
+        SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE
+    );
+    assert(window != nullptr);
+
+
+    chk(SDL_Vulkan_CreateSurface(window, vkInstance, nullptr, &vkSurface));
+
+
+    {
+        uint32_t formatCount { 0 };
+        chk(vkGetPhysicalDeviceSurfaceFormatsKHR(devices[deviceIndex], vkSurface, &formatCount, nullptr));
+        std::vector<VkSurfaceFormatKHR> surfaceFormats(formatCount);
+        chk(vkGetPhysicalDeviceSurfaceFormatsKHR(devices[deviceIndex], vkSurface, &formatCount, surfaceFormats.data()));
+
+        // Select suitable surface image format
+        imageFormat = surfaceFormats[0].format;
+        for (const auto& availableFormat : surfaceFormats)
+    {
+        if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB &&
+            availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+        {
+            imageFormat = availableFormat.format;
+            break;
+        }
+    }
+    }
+
     // Queue Family
     uint32_t queueFamilyCount {0};
     vkGetPhysicalDeviceQueueFamilyProperties(devices[deviceIndex], &queueFamilyCount, nullptr);
@@ -329,20 +357,14 @@ void Application::InitVulkan()
 
     chk(vmaCreateAllocator(&allocatorCreateInfo, &vkAllocator));
 
-    // Window
-    window = SDL_CreateWindow(
-        createInfo.AppName,
-        createInfo.WindowInfo.Width, createInfo.WindowInfo.Height,
-        SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE
-    );
 
-    chk(SDL_Vulkan_CreateSurface(window, vkInstance, nullptr, &vkSurface));
+    
 
     chk(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(devices[deviceIndex], vkSurface, &surfaceCaps));
 
     // Swapchain
     VkExtent2D swapChainExtent { surfaceCaps.currentExtent };
-    if (swapChainExtent.width = 0xFFFFFFFF)
+    if (swapChainExtent.width == 0xFFFFFFFF)
     {
         swapChainExtent = {
             .width = static_cast<uint32_t>(createInfo.WindowInfo.Width),
@@ -1191,7 +1213,7 @@ void Application::CleanUP()
 		vkDestroyImageView(vkDevice, swapchainImageViews[i], nullptr);
 	}
 	vmaDestroyBuffer(vkAllocator, modelVBuffer, modelVBufferAllocation);
-	for (auto i = 0; i < textures.size(); i++) {
+	for (int i = 0; i < textures.size(); i++) {
 		vkDestroyImageView(vkDevice, textures[i].view, nullptr);
 		vkDestroySampler(vkDevice, textures[i].sampler, nullptr);
 		vmaDestroyImage(vkAllocator, textures[i].image, textures[i].allocation);
