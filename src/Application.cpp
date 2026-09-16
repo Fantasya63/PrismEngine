@@ -142,6 +142,15 @@ void Application::InitSDL()
 {
     chk(SDL_Init(SDL_INIT_VIDEO));
 	chk(SDL_Vulkan_LoadLibrary(NULL));
+
+    // Window
+    window = SDL_CreateWindow(
+        createInfo.AppName,
+        createInfo.WindowInfo.Width, createInfo.WindowInfo.Height,
+        SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE
+    );
+    assert(window != nullptr);
+
 }
 
 
@@ -213,11 +222,14 @@ void Application::InitVulkan()
     };
 
     chk(vkCreateInstance(&instanceCI, nullptr, &vkInstance));
+    chk(SDL_Vulkan_CreateSurface(window, vkInstance, nullptr, &vkSurface));
 
 
     // Device 
     uint32_t deviceCount{0};
     chk(vkEnumeratePhysicalDevices(vkInstance, &deviceCount, nullptr));
+    chk(deviceCount != 0);
+    
     devices.resize(deviceCount);
     chk(vkEnumeratePhysicalDevices(vkInstance, &deviceCount, devices.data()));
 
@@ -236,18 +248,6 @@ void Application::InitVulkan()
     Print(std::format("Selected Device: {}", deviceProperties.properties.deviceName));
 
 
-    // Window
-    window = SDL_CreateWindow(
-        createInfo.AppName,
-        createInfo.WindowInfo.Width, createInfo.WindowInfo.Height,
-        SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE
-    );
-    assert(window != nullptr);
-
-
-    chk(SDL_Vulkan_CreateSurface(window, vkInstance, nullptr, &vkSurface));
-
-
     {
         uint32_t formatCount { 0 };
         chk(vkGetPhysicalDeviceSurfaceFormatsKHR(devices[deviceIndex], vkSurface, &formatCount, nullptr));
@@ -257,14 +257,14 @@ void Application::InitVulkan()
         // Select suitable surface image format
         imageFormat = surfaceFormats[0].format;
         for (const auto& availableFormat : surfaceFormats)
-    {
-        if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB &&
-            availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
         {
-            imageFormat = availableFormat.format;
-            break;
+            if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB &&
+                availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+            {
+                imageFormat = availableFormat.format;
+                break;
+            }
         }
-    }
     }
 
     // Queue Family
@@ -343,9 +343,6 @@ void Application::InitVulkan()
     };
 
     chk(vmaCreateAllocator(&allocatorCreateInfo, &vkAllocator));
-
-
-    
 
     chk(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(devices[deviceIndex], vkSurface, &surfaceCaps));
 
