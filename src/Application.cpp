@@ -17,6 +17,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#define TINYOBJLOADER_USE_MAPBOX_BINARY_FLOAT 0
 #include <tiny_obj_loader.h>
 
 #if defined(__INTELLISENSE__) || !defined(USE_CPP20_MODULES)
@@ -56,7 +57,10 @@ constexpr VkIndexType getVkIndexType() {
 
 constexpr VkIndexType meshIndexVkType = getVkIndexType();
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 6b910a2317cdb9315359c4fb432ed56412077df3
 struct CameraData {
     glm::vec3 Position { 0.0f, 0.0f, 0.0f };
     float FOV { 45.0f };
@@ -73,21 +77,6 @@ struct Vertex {
 };
 
 
-
-struct ShaderData {
-    glm::mat4 projection;
-    glm::mat4 view;
-    glm::mat4 model[3];
-    glm::vec4 lightPos{ 0.0f, -10.0f, 10.0f, 0.0f };
-    uint32_t selected{1};
-} shaderData{};
-
-struct ShaderDataBuffer {
-	VmaAllocation allocation{ VK_NULL_HANDLE };
-	VmaAllocationInfo allocationInfo{};
-	VkBuffer buffer{ VK_NULL_HANDLE };
-	VkDeviceAddress deviceAddress{};
-};
 
 
 namespace {
@@ -116,8 +105,12 @@ namespace {
     VkFormat depthFormat { VK_FORMAT_UNDEFINED };
     VkShaderModule shaderModule{};
 
+<<<<<<< HEAD
     std::array<ShaderDataBuffer, maxFramesInFlight> shaderDataBuffers;
     std::array<VkCommandBuffer, maxFramesInFlight> commandBuffers; 
+=======
+    ShaderData  shaderData{};
+>>>>>>> 6b910a2317cdb9315359c4fb432ed56412077df3
 }
 
 
@@ -776,7 +769,7 @@ void Application::InitVulkan()
     slangGlobalSession->createSession(slangSessionDesc, slangSession.writeRef());
 
     Slang::ComPtr<slang::IModule> slangModule {
-        slangSession->loadModuleFromSourceString("triangle", shaderSourcePath.c_str(), nullptr, nullptr)
+        slangSession->loadModuleFromSourceString("triangle", (const char*)(shaderSourcePath.c_str()), nullptr, nullptr)
     };
     Slang::ComPtr<ISlangBlob> spirv;
     slangModule->getTargetCode(0, spirv.writeRef());

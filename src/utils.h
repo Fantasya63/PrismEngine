@@ -1,5 +1,8 @@
 #pragma once
+<<<<<<< HEAD
 
+=======
+>>>>>>> 6b910a2317cdb9315359c4fb432ed56412077df3
 #include <iostream>
 #include <string_view>
 

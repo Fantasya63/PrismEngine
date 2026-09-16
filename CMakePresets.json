@@ -1,17 +1,127 @@
+
 {
-    "version": 8,
-    "configurePresets": [
-        {
-            "name": "GCC 15.2.0 x86_64-linux-gnu",
-            "displayName": "GCC 15.2.0 x86_64-linux-gnu",
-            "description": "Using compilers: C = /usr/bin/gcc, CXX = /usr/bin/g++",
-            "binaryDir": "${sourceDir}/out/build/${presetName}",
-            "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
-                "CMAKE_C_COMPILER": "/usr/bin/gcc",
-                "CMAKE_CXX_COMPILER": "/usr/bin/g++",
-                "CMAKE_BUILD_TYPE": "Debug"
-            }
-        }
-    ]
+  "version": 8,
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+        "Vulkan_ROOT": "$penv{VULKAN_SDK}"
+      },
+      "environment": {
+        "VULKAN_SDK": "$penv{VULKAN_SDK}"
+      }
+      
+    },
+    {
+      "name": "windows-base",
+      "hidden": true,
+      "inherits": "base",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64"
+    },
+    {
+      "name": "vs2022-windows-debug",
+      "displayName": "VS 2022 x64 (Debug)",
+      "inherits": "windows-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "vs2022-windows-release",
+      "displayName": "VS 2022 x64 (Release)",
+      "inherits": "windows-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "vs2022-windows-relwithdebinfo",
+      "displayName": "VS 2022 x64 (RelWithDebInfo)",
+      "inherits": "windows-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    },
+    {
+      "name": "linux-base",
+      "hidden": true,
+      "inherits": "base",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++"
+      },
+      "architecture": "x64"
+    },
+    {
+      "name": "gcc-linux-debug",
+      "displayName": "GCC Linux (Debug)",
+      "inherits": "linux-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "gcc-linux-release",
+      "displayName": "GCC Linux (Release)",
+      "inherits": "linux-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "gcc-linux-relwithdebinfo",
+      "displayName": "GCC Linux (RelWithDebInfo)",
+      "inherits": "linux-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "vs2022-windows-debug",
+      "configurePreset": "vs2022-windows-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "vs2022-windows-release",
+      "configurePreset": "vs2022-windows-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "vs2022-windows-relwithdebinfo",
+      "configurePreset": "vs2022-windows-relwithdebinfo",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "gcc-linux-debug",
+      "configurePreset": "gcc-linux-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "gcc-linux-release",
+      "configurePreset": "gcc-linux-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "gcc-linux-relwithdebinfo",
+      "configurePreset": "gcc-linux-relwithdebinfo",
+      "configuration": "RelWithDebInfo"
+    }
+  ]
 }

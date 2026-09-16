@@ -41,11 +41,24 @@ set( KTX_FEATURE_JS OFF CACHE BOOL "" FORCE)
 set( KTX_FEATURE_TOOLS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(KTX)
 
+# GLM
+FetchContent_Declare(
+    glm
+    GIT_REPOSITORY https://github.com/g-truc/glm.git
+    GIT_TAG        1.0.1          # Pins to a stable GLM version
+    GIT_SHALLOW    ON
+)
+FetchContent_MakeAvailable(glm)
 
-find_package(glm REQUIRED)
+# 1. Normalize VULKAN_SDK environment variable for CMake
+if(DEFINED ENV{VULKAN_SDK})
+    file(TO_CMAKE_PATH "$ENV{VULKAN_SDK}" VULKAN_SDK_DIR)
+    set(Vulkan_ROOT "${VULKAN_SDK_DIR}")
+endif()
+
 find_package(Vulkan 1.4.335 REQUIRED)
 
-include_directories(external/tinyobj)
+include_directories(vendor/tinyobj)
 
 
 add_library(VulkanCppModule INTERFACE)
@@ -93,6 +106,7 @@ set_target_properties(PrismEngine PROPERTIES CXX_STANDARD 20)
 
 target_compile_definitions(PrismEngine PRIVATE VULKAN_HPP_NO_EXCEPTIONS)
 target_compile_definitions(PrismEngine PRIVATE "VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS")
+<<<<<<< HEAD
 
 
 target_link_libraries(PrismEngine PRIVATE 
@@ -102,6 +116,9 @@ target_link_libraries(PrismEngine PRIVATE
     ktx
     Slang::Slang
 )
+=======
+target_compile_definitions(PrismEngine PRIVATE TINYOBJ_NO_FAST_FLOAT)
+>>>>>>> 6b910a2317cdb9315359c4fb432ed56412077df3
 
 # Expose KTX and local headers cleanly
 target_include_directories(PrismEngine PRIVATE
@@ -109,4 +126,13 @@ target_include_directories(PrismEngine PRIVATE
     ${ktx_SOURCE_DIR}/other_include
     vendor/tinyobj
 )
+
+target_link_libraries(PrismEngine PRIVATE 
+    Vulkan::cppm
+    glm::glm
+    SDL3::SDL3-static # Links the static target provided by FetchContent
+    ktx
+    Slang::Slang
+)
+
 
