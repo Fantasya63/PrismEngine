@@ -58,7 +58,7 @@ constexpr VkIndexType getVkIndexType() {
 constexpr VkIndexType meshIndexVkType = getVkIndexType();
 
 struct CameraData {
-    glm::vec3 Position { 0.0f, 0.0f, 0.0f };
+    glm::vec3 Position { 0.0f, 0.0f, 3.0f };
     float FOV { 45.0f };
     float Near = { 0.1f };
     float Far = { 100.0f };
@@ -467,12 +467,12 @@ void Application::InitVulkan()
     
 
    
-   /* tinyobj::attrib_t tinyObjAttrib;
-    std::vector<tinyobj::shape_t> shapes;
-    std::vector<tinyobj::material_t> materials;
-    chk(tinyobj::LoadObj(&tinyObjAttrib, &shapes, &materials, nullptr, nullptr, "asses/suzanne.obj"));*/
+//    /* tinyobj::attrib_t tinyObjAttrib;
+//     std::vector<tinyobj::shape_t> shapes;
+//     std::vector<tinyobj::material_t> materials;
+//     chk(tinyobj::LoadObj(&tinyObjAttrib, &shapes, &materials, nullptr, nullptr, "asses/suzanne.obj"));*/
 
-    //indexCount = {shapes[0].mesh.indices.size()};
+//     //indexCount = {shapes[0].mesh.indices.size()};
     indexCount = 3;
     std::vector<Vertex> vertices{};
     std::vector<meshIndex_t> indices{};
@@ -1195,13 +1195,13 @@ void Application::MainLoop()
             {
                 if (event.button.button == SDL_BUTTON_LEFT)
                 {
-                    objectRotations[shaderData.selected].x -= (float)event.motion.yrel * elapsedTime;
-                    objectRotations[shaderData.selected].y += (float)event.motion.xrel * elapsedTime;
+                    objectRotations[shaderData.selected].x -= (float)event.motion.yrel * 0.0001f * elapsedTime;
+                    objectRotations[shaderData.selected].y += (float)event.motion.xrel * 0.0001f * elapsedTime;
                 }
             }
 
             if (event.type == SDL_EVENT_MOUSE_WHEEL) {
-                camData.Position.z += (float)event.wheel.y * elapsedTime * 10.0f;
+                camData.Position.z += (float)event.wheel.y * elapsedTime * 0.0001f;
             }
 
             // Select active model instance
@@ -1255,7 +1255,7 @@ void Application::MainLoop()
 
             swapchainCreateInfo.oldSwapchain = vkSwapChain;
             swapchainCreateInfo.imageExtent = targetExtent;
-            
+
             chk(vkCreateSwapchainKHR(vkDevice, &swapchainCreateInfo, nullptr, &vkSwapChain));
             for (auto i = 0; i < swapChainImageCount; i++) {
                 vkDestroyImageView(vkDevice, swapchainImageViews[i], nullptr);
