@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.29)
-project(PrismEngine VERSION 0.1.0 LANGUAGES C CXX)
+project(PrismEngine LANGUAGES C CXX)
 
 include(FetchContent)
 
@@ -50,16 +50,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glm)
 
-# 1. Normalize VULKAN_SDK environment variable for CMake
-if(DEFINED ENV{VULKAN_SDK})
-    file(TO_CMAKE_PATH "$ENV{VULKAN_SDK}" VULKAN_SDK_DIR)
-    set(Vulkan_ROOT "${VULKAN_SDK_DIR}")
-endif()
+# # 1. Normalize VULKAN_SDK environment variable for CMake
+# if(DEFINED ENV{VULKAN_SDK})
+#     file(TO_CMAKE_PATH "$ENV{VULKAN_SDK}" VULKAN_SDK_DIR)
+#     set(Vulkan_ROOT "${VULKAN_SDK_DIR}")
+# endif()
 
-find_package(Vulkan 1.4.335 REQUIRED)
-
-include_directories(vendor/tinyobj)
-
+find_package(Vulkan REQUIRED COMPONENTS volk shaderc_combined)
 
 add_library(VulkanCppModule INTERFACE)
 add_library(Vulkan::cppm ALIAS VulkanCppModule)
@@ -101,13 +98,18 @@ add_executable(PrismEngine
     src/main.cpp
     src/Application.cpp
 )
-set_target_properties(PrismEngine PROPERTIES CXX_STANDARD 20)
 
+if (MSVC)
+    target_compile_options(PrismEngine PRIVATE /std:c++latest)
+endif()
+
+set_target_properties(PrismEngine PROPERTIES CXX_STANDARD 20)
 target_compile_definitions(PrismEngine PRIVATE VULKAN_HPP_NO_EXCEPTIONS)
 target_compile_definitions(PrismEngine PRIVATE "VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS")
 
 # Expose KTX and local headers cleanly
 target_include_directories(PrismEngine PRIVATE
+    ${Vulkan_INCLUDE_DIRS}
     ${ktx_SOURCE_DIR}/include
     ${ktx_SOURCE_DIR}/other_include
     
@@ -115,6 +117,8 @@ target_include_directories(PrismEngine PRIVATE
 
 target_link_libraries(PrismEngine PRIVATE 
     Vulkan::cppm
+    Vulkan::volk
+    Vulkan::shaderc_combined
     glm::glm
     SDL3::SDL3-static # Links the static target provided by FetchContent
     ktx

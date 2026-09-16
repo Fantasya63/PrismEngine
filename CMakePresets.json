@@ -1,4 +1,3 @@
-
 {
   "version": 8,
   "configurePresets": [
@@ -13,7 +12,6 @@
       "environment": {
         "VULKAN_SDK": "$penv{VULKAN_SDK}"
       }
-      
     },
     {
       "name": "windows-base",
@@ -25,7 +23,10 @@
         "rhs": "Windows"
       },
       "generator": "Visual Studio 17 2022",
-      "architecture": "x64"
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      }
     },
     {
       "name": "vs2022-windows-debug",
@@ -62,10 +63,9 @@
       },
       "generator": "Ninja",
       "cacheVariables": {
-        "CMAKE_C_COMPILER": "gcc",
-        "CMAKE_CXX_COMPILER": "g++"
-      },
-      "architecture": "x64"
+        "CMAKE_C_COMPILER": "/usr/bin/gcc",
+        "CMAKE_CXX_COMPILER": "/usr/bin/g++"
+      }
     },
     {
       "name": "gcc-linux-debug",
