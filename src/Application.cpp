@@ -17,8 +17,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-#define TINYOBJLOADER_USE_MAPBOX_BINARY_FLOAT 0
-#include <tiny_obj_loader.h>
+//#include <tiny_obj_loader.h>
 
 #if defined(__INTELLISENSE__) || !defined(USE_CPP20_MODULES)
 #include <vulkan/vulkan_raii.hpp>
@@ -419,16 +418,42 @@ void Application::InitVulkan()
     };
     chk(vkCreateImageView(vkDevice, &depthImageViewCreateInfo, nullptr, &vkDepthImageView));
 
-    tinyobj::attrib_t tinyObjAttrib;
+   /* tinyobj::attrib_t tinyObjAttrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
-    chk(tinyobj::LoadObj(&tinyObjAttrib, &shapes, &materials, nullptr, nullptr, "asses/suzanne.obj"));
+    chk(tinyobj::LoadObj(&tinyObjAttrib, &shapes, &materials, nullptr, nullptr, "asses/suzanne.obj"));*/
 
-    indexCount = {shapes[0].mesh.indices.size()};
+    //indexCount = {shapes[0].mesh.indices.size()};
+    indexCount = 3;
     std::vector<Vertex> vertices{};
     std::vector<meshIndex_t> indices{};
 
-    for (auto& index : shapes[0].mesh.indices)
+    {
+        Vertex v1 = {
+            .pos {-0.5f, 0.5f, 0.0f},
+            .normal {0.0f, 0.0f, 1.0f},
+            .uv {1.0f, 0.0f}
+        };
+        Vertex v2 = {
+            .pos {0.0f, -0.5f, 0.0f},
+            .normal {0.0f, 0.0f, 1.0f},
+            .uv {1.0f, 0.0f}
+        };
+        Vertex v3 = {
+            .pos {0.5f, 0.5f, 0.0f},
+            .normal {0.0f, 0.0f, 1.0f},
+            .uv {1.0f, 0.0f}
+        };
+        vertices.push_back(v1);
+        vertices.push_back(v2);
+        vertices.push_back(v3);
+
+        indices.push_back(0);
+        indices.push_back(1);
+        indices.push_back(2);
+    }
+
+   /* for (auto& index : shapes[0].mesh.indices)
     {
         Vertex v {
             .pos = { tinyObjAttrib.vertices[index.vertex_index * 3], -tinyObjAttrib.vertices[index.vertex_index * 3 + 1], tinyObjAttrib.vertices[index.vertex_index * 3 + 2] },
@@ -438,7 +463,7 @@ void Application::InitVulkan()
 
         vertices.push_back(v);
         indices.push_back(static_cast<meshIndex_t>(indices.size()));
-    }
+    }*/
 
     // Upload model data to gpu
     vertexBufferSize =  sizeof(Vertex) * vertices.size() ;

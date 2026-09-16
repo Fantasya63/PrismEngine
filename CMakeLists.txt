@@ -100,20 +100,17 @@ target_compile_definitions(VulkanCppModule
 add_executable(PrismEngine
     src/main.cpp
     src/Application.cpp
-    vendor/tinyobj/tiny_obj_loader.cc
-    vendor/tinyobj/tiny_obj_loader.cc
 )
 set_target_properties(PrismEngine PROPERTIES CXX_STANDARD 20)
 
 target_compile_definitions(PrismEngine PRIVATE VULKAN_HPP_NO_EXCEPTIONS)
 target_compile_definitions(PrismEngine PRIVATE "VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS")
 
-
 # Expose KTX and local headers cleanly
 target_include_directories(PrismEngine PRIVATE
     ${ktx_SOURCE_DIR}/include
     ${ktx_SOURCE_DIR}/other_include
-    vendor/tinyobj
+    
 )
 
 target_link_libraries(PrismEngine PRIVATE 
