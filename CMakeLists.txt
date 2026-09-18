@@ -58,7 +58,16 @@ if(DEFINED ENV{VULKAN_SDK})
     list(APPEND CMAKE_PREFIX_PATH "${VULKAN_SDK_DIR}")
 endif()
 
-find_package(Vulkan REQUIRED COMPONENTS volk)
+find_package(Vulkan REQUIRED)
+
+# Find Volk in Vulkan SDK
+find_path(VOLK_INCLUDE_DIR NAMES volk.h HINTS $ENV{VULKAN_SDK}/include)
+find_library(VOLK_LIBRARY NAMES volk HINTS $ENV{VULKAN_SDK}/lib $ENV{VULKAN_SDK}/Lib)
+
+add_library(volk INTERFACE)
+target_include_directories(volk INTERFACE ${VOLK_INCLUDE_DIR})
+target_link_libraries(volk INTERFACE ${VOLK_LIBRARY})
+
 
 add_library(VulkanCppModule INTERFACE)
 add_library(Vulkan::cppm ALIAS VulkanCppModule)
