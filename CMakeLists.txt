@@ -56,7 +56,15 @@ FetchContent_MakeAvailable(glm)
 #     set(Vulkan_ROOT "${VULKAN_SDK_DIR}")
 # endif()
 
-find_package(Vulkan REQUIRED COMPONENTS volk)
+find_package(Vulkan REQUIRED)
+FetchContent_Declare(
+    volk
+    GIT_REPOSITORY https://github.com/zeux/volk.git
+    GIT_TAG        vulkan-sdk-1.3.296.0
+    GIT_SHALLOW    ON
+)
+FetchContent_MakeAvailable(volk)
+
 
 add_library(VulkanCppModule INTERFACE)
 add_library(Vulkan::cppm ALIAS VulkanCppModule)
@@ -117,7 +125,7 @@ target_include_directories(PrismEngine PRIVATE
 
 target_link_libraries(PrismEngine PRIVATE 
     Vulkan::cppm
-    Vulkan::volk
+    volk::volk
     Vulkan::shaderc_combined
     glm::glm
     SDL3::SDL3-static # Links the static target provided by FetchContent
