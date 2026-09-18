@@ -50,11 +50,21 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glm)
 
+
+# VULKAN
+if(DEFINED ENV{VULKAN_SDK})
+    file(TO_CMAKE_PATH "$ENV{VULKAN_SDK}" VULKAN_SDK_DIR)
+    set(Vulkan_ROOT "${VULKAN_SDK_DIR}")
+    list(APPEND CMAKE_PREFIX_PATH "${VULKAN_SDK_DIR}")
+endif()
+
 find_package(Vulkan REQUIRED COMPONENTS volk)
 
 add_library(VulkanCppModule INTERFACE)
 add_library(Vulkan::cppm ALIAS VulkanCppModule)
 
+
+# SLANG
 find_path(SLANG_INCLUDE_DIR 
     NAMES slang/slang.h slang.h
     HINTS 
@@ -77,8 +87,6 @@ endif()
 add_library(Slang::Slang INTERFACE IMPORTED)
 target_include_directories(Slang::Slang INTERFACE ${SLANG_INCLUDE_DIR})
 target_link_libraries(Slang::Slang INTERFACE ${SLANG_LIBRARY})
-
-
 
 
 target_link_libraries(VulkanCppModule INTERFACE Vulkan::Vulkan)
