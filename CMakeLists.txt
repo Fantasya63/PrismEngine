@@ -130,7 +130,7 @@ target_include_directories(PrismEngine PRIVATE
 
 target_link_libraries(PrismEngine PRIVATE 
     Vulkan::cppm
-    Vulkan::volk
+    volk
     glm::glm
     SDL3::SDL3-static # Links the static target provided by FetchContent
     ktx
