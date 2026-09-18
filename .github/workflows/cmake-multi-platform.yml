@@ -52,7 +52,7 @@ jobs:
       - name: Install LunarG Vulkan SDK
         uses: humbletim/install-vulkan-sdk@v1.2
         with:
-          vulkan-version: 1.4.357
+          version: 1.4.357
           cache: true
 
             
