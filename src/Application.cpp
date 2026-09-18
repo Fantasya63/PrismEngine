@@ -1,6 +1,6 @@
 
 #define VOLK_IMPLEMENTATION
-#include <volk.h>
+#include <volk/volk.h>
 
 #include "Application.h"
 #include "utils.h"
@@ -29,8 +29,8 @@ import vulkan_hpp;
 
 #include <ktx.h>
 #include <ktxvulkan.h>
-#include <slang.h>
-#include <slang-com-ptr.h>
+#include <slang/slang.h>
+#include <slang/slang-com-ptr.h>
 #include <type_traits>
 
 

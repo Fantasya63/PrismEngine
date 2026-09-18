@@ -2,8 +2,8 @@
 
 #include <glm/glm.hpp>
 #include <vma/vk_mem_alloc.h>
-#include <slang.h>
-#include <slang-com-ptr.h>
+#include <slang/slang.h>
+#include <slang/slang-com-ptr.h>
 
 
 #if defined(__INTELLISENSE__) || !defined(USE_CPP20_MODULES)

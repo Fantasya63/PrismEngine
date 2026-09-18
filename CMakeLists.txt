@@ -50,51 +50,33 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glm)
 
-# # 1. Normalize VULKAN_SDK environment variable for CMake
-# if(DEFINED ENV{VULKAN_SDK})
-#     file(TO_CMAKE_PATH "$ENV{VULKAN_SDK}" VULKAN_SDK_DIR)
-#     set(Vulkan_ROOT "${VULKAN_SDK_DIR}")
-# endif()
-
-find_package(Vulkan REQUIRED)
-FetchContent_Declare(
-    volk
-    GIT_REPOSITORY https://github.com/zeux/volk.git
-    GIT_TAG        vulkan-sdk-1.3.296.0
-    GIT_SHALLOW    ON
-)
-FetchContent_MakeAvailable(volk)
-
+find_package(Vulkan REQUIRED COMPONENTS volk)
 
 add_library(VulkanCppModule INTERFACE)
 add_library(Vulkan::cppm ALIAS VulkanCppModule)
 
-
-# Specify the latest stable Slang release tag
-set(SLANG_VERSION "v2026.18")
-string(REGEX REPLACE "^v" "" SLANG_VER_NUM "${SLANG_VERSION}")
-
-if(UNIX AND NOT APPLE)
-    set(SLANG_ARCHIVE "slang-${SLANG_VER_NUM}-linux-x86_64.zip")
-elseif(WIN32)
-    set(SLANG_ARCHIVE "slang-${SLANG_VER_NUM}-win64.zip")
-endif()
-
-FetchContent_Declare(
-    slang_binaries
-    URL https://github.com/shader-slang/slang/releases/download/${SLANG_VERSION}/${SLANG_ARCHIVE}
+find_path(SLANG_INCLUDE_DIR 
+    NAMES slang/slang.h slang.h
+    HINTS 
+        $ENV{VULKAN_SDK}/include
+        ${Vulkan_INCLUDE_DIRS}
 )
-FetchContent_MakeAvailable(slang_binaries)
+
+find_library(SLANG_LIBRARY 
+    NAMES slang slang-lib
+    HINTS 
+        $ENV{VULKAN_SDK}/lib
+        $ENV{VULKAN_SDK}/Lib
+        ${Vulkan_LIBRARIES}
+)
+
+if(NOT SLANG_INCLUDE_DIR OR NOT SLANG_LIBRARY)
+    message(FATAL_ERROR "Slang was not found in Vulkan SDK!\nChecked SDK Path: $ENV{VULKAN_SDK}")
+endif()
 
 add_library(Slang::Slang INTERFACE IMPORTED)
-
-target_include_directories(Slang::Slang INTERFACE ${slang_binaries_SOURCE_DIR}/include)
-
-if(UNIX AND NOT APPLE)
-    target_link_libraries(Slang::Slang INTERFACE ${slang_binaries_SOURCE_DIR}/lib/libslang.so)
-elseif(WIN32)
-    target_link_libraries(Slang::Slang INTERFACE ${slang_binaries_SOURCE_DIR}/lib/slang.lib)
-endif()
+target_include_directories(Slang::Slang INTERFACE ${SLANG_INCLUDE_DIR})
+target_link_libraries(Slang::Slang INTERFACE ${SLANG_LIBRARY})
 
 
 
@@ -129,7 +111,7 @@ target_include_directories(PrismEngine PRIVATE
 
 target_link_libraries(PrismEngine PRIVATE 
     Vulkan::cppm
-    volk::volk
+    Vulkan::volk
     glm::glm
     SDL3::SDL3-static # Links the static target provided by FetchContent
     ktx
