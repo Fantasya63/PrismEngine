@@ -69,28 +69,32 @@ FetchContent_MakeAvailable(volk)
 add_library(VulkanCppModule INTERFACE)
 add_library(Vulkan::cppm ALIAS VulkanCppModule)
 
-find_path(SLANG_INCLUDE_DIR 
-    NAMES slang/slang.h slang.h
-    HINTS 
-        $ENV{VULKAN_SDK}/include
-        ${Vulkan_INCLUDE_DIRS}
-)
 
-find_library(SLANG_LIBRARY 
-    NAMES slang slang-lib
-    HINTS 
-        $ENV{VULKAN_SDK}/lib
-        $ENV{VULKAN_SDK}/Lib
-        ${Vulkan_LIBRARIES}
-)
+# Specify the latest stable Slang release tag
+set(SLANG_VERSION "v2026.18")
+string(REGEX REPLACE "^v" "" SLANG_VER_NUM "${SLANG_VERSION}")
 
-if(NOT SLANG_INCLUDE_DIR OR NOT SLANG_LIBRARY)
-    message(FATAL_ERROR "Slang was not found in Vulkan SDK!\nChecked SDK Path: $ENV{VULKAN_SDK}")
+if(UNIX AND NOT APPLE)
+    set(SLANG_ARCHIVE "slang-${SLANG_VER_NUM}-linux-x86_64.zip")
+elseif(WIN32)
+    set(SLANG_ARCHIVE "slang-${SLANG_VER_NUM}-win64.zip")
 endif()
 
+FetchContent_Declare(
+    slang_binaries
+    URL https://github.com/shader-slang/slang/releases/download/${SLANG_VERSION}/${SLANG_ARCHIVE}
+)
+FetchContent_MakeAvailable(slang_binaries)
+
 add_library(Slang::Slang INTERFACE IMPORTED)
-target_include_directories(Slang::Slang INTERFACE ${SLANG_INCLUDE_DIR})
-target_link_libraries(Slang::Slang INTERFACE ${SLANG_LIBRARY})
+
+target_include_directories(Slang::Slang INTERFACE ${slang_binaries_SOURCE_DIR}/include)
+
+if(UNIX AND NOT APPLE)
+    target_link_libraries(Slang::Slang INTERFACE ${slang_binaries_SOURCE_DIR}/lib/libslang.so)
+elseif(WIN32)
+    target_link_libraries(Slang::Slang INTERFACE ${slang_binaries_SOURCE_DIR}/lib/slang.lib)
+endif()
 
 
 
