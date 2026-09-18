@@ -56,7 +56,9 @@ if(DEFINED ENV{VULKAN_SDK})
     file(TO_CMAKE_PATH "$ENV{VULKAN_SDK}" VULKAN_SDK_DIR)
     set(Vulkan_ROOT "${VULKAN_SDK_DIR}")
     list(APPEND CMAKE_PREFIX_PATH "${VULKAN_SDK_DIR}")
+    list(APPEND CMAKE_LIBRARY_PATH "${VULKAN_SDK_DIR}/lib")
 endif()
+
 
 find_package(Vulkan REQUIRED)
 
