@@ -56,7 +56,7 @@ FetchContent_MakeAvailable(glm)
 #     set(Vulkan_ROOT "${VULKAN_SDK_DIR}")
 # endif()
 
-find_package(Vulkan REQUIRED COMPONENTS volk shaderc_combined)
+find_package(Vulkan REQUIRED COMPONENTS volk)
 
 add_library(VulkanCppModule INTERFACE)
 add_library(Vulkan::cppm ALIAS VulkanCppModule)
