@@ -110,7 +110,8 @@ target_compile_definitions(VulkanCppModule
 add_executable(PrismEngine
     src/main.cpp
     src/Application.cpp
-)
+    src/Camera/EditorCamera.cpp
+ "src/Camera/Camera.h")
 
 if (MSVC)
     target_compile_options(PrismEngine PRIVATE /std:c++latest)

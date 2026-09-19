@@ -101,6 +101,8 @@ namespace {
     std::array<ShaderDataBuffer, maxFramesInFlight> shaderDataBuffers;
     ShaderData  shaderData{};
 
+    
+
 }
 
 
@@ -123,7 +125,14 @@ Application::Application(const AppCreateInfo& info)
     pipeline( VK_NULL_HANDLE ),
     frameIndex( 0 )
 {
-
+    EditorCamera::EditorCamCreateInfo camCI = {
+        .ViewportWidth = static_cast<float>(createInfo.WindowInfo.Width),
+        .ViewportHeight = static_cast<float>(createInfo.WindowInfo.Height)
+    };
+    m_Camera = EditorCamera(camCI);
+    glm::vec3 camPos { 0.0f, 0.0f, 1.0f };
+    m_Camera.SetPosition(camPos);
+    
 }
 
 void Application::Run()
@@ -146,6 +155,10 @@ void Application::InitSDL()
         SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE
     );
     assert(window != nullptr);
+
+    if (!SDL_SetWindowRelativeMouseMode(window, true)) {
+        SDL_Log("Error enabling relative mouse mode: %s", SDL_GetError());
+    }
 
 }
 
@@ -998,8 +1011,8 @@ void Application::MainLoop()
         chkSwapchain(vkAcquireNextImageKHR(vkDevice, vkSwapChain, UINT64_MAX, imageAcquiredSemaphores[frameIndex], VK_NULL_HANDLE, &imageIndex), &updateSwapchain);
 
         // Update Shader Data
-        shaderData.projection = glm::perspective(camData.FOV, (float)createInfo.WindowInfo.Width / (float)createInfo.WindowInfo.Height, camData.Near, camData.Far);
-        shaderData.view = glm::translate(glm::mat4(1.0f), -camData.Position);
+        shaderData.projection = m_Camera.GetProjMatrix();
+        shaderData.view = m_Camera.GetViewMatrix();
 
         for (auto i = 0; i < 3; i++)
         {
@@ -1179,8 +1192,10 @@ void Application::MainLoop()
         chkSwapchain(vkQueuePresentKHR(vkQueue, &presentInfo), &updateSwapchain);
 
         // Poll Events
-        float elapsedTime { SDL_GetTicks() - lastTime / 1000.0f };
+        float deltaTime { (SDL_GetTicks() - lastTime) * 0.001f };
         lastTime = SDL_GetTicks();
+
+        float scroll = 0.0f;
 
         for (SDL_Event event; SDL_PollEvent(&event); )
         {
@@ -1189,35 +1204,101 @@ void Application::MainLoop()
                 exitProgram = true;
                 break;
             }
+            // Camera
+            if (event.type == SDL_EVENT_MOUSE_WHEEL) {
+                scroll += static_cast<float>(-event.wheel.y);
+            }
+
+
+
 
             // Rotate the selected object with mouse drag
             if (event.type == SDL_EVENT_MOUSE_MOTION)
             {
+                // Camera
+                {
+                    glm::vec3 camRot = m_Camera.GetRotation();
+                    camRot.x += event.motion.yrel * 0.01f;
+                    camRot.x = glm::clamp(camRot.x, glm::radians(-88.0f), glm::radians(88.0f));
+
+                    float mouseX = -event.motion.xrel * m_Camera.LookSensitivity;
+                    camRot.y += mouseX; 
+
+                    m_Camera.SetRotation(camRot);
+                }
+
                 if (event.button.button == SDL_BUTTON_LEFT)
                 {
-                    objectRotations[shaderData.selected].x -= (float)event.motion.yrel * 0.0001f * elapsedTime;
-                    objectRotations[shaderData.selected].y += (float)event.motion.xrel * 0.0001f * elapsedTime;
+                    objectRotations[shaderData.selected].x -= (float)event.motion.yrel  * deltaTime;
+                    objectRotations[shaderData.selected].y += (float)event.motion.xrel  * deltaTime;
+                }
+                if (event.button.button == SDL_BUTTON_RIGHT)
+                {
+                    if (!SDL_SetWindowRelativeMouseMode(window, true)) {
+                        SDL_Log("Error enabling relative mouse mode: %s", SDL_GetError());
+                    }
                 }
             }
 
-            if (event.type == SDL_EVENT_MOUSE_WHEEL) {
-                camData.Position.z += (float)event.wheel.y * elapsedTime * 0.0001f;
-            }
 
             // Select active model instance
             if (event.type == SDL_EVENT_KEY_DOWN) {
+                if (event.key.key == SDLK_ESCAPE)
+                {
+                    if (!SDL_SetWindowRelativeMouseMode(window, false)) {
+                        SDL_Log("Error enabling relative mouse mode: %s", SDL_GetError());
+                    }
+                }
+
                 if (event.key.key == SDLK_PLUS || event.key.key == SDLK_KP_PLUS) {
                     shaderData.selected = (shaderData.selected < 2) ? shaderData.selected + 1 : 0;
                 }
                 if (event.key.key == SDLK_MINUS || event.key.key == SDLK_KP_MINUS) {
                     shaderData.selected = (shaderData.selected > 0) ? shaderData.selected - 1 : 2;
                 }
+
             }
 
             // Window resize
             if (event.type == SDL_EVENT_WINDOW_RESIZED) {
                 updateSwapchain = true;
             }
+        }
+
+        // Move camera
+        {
+            const bool* keyStates = SDL_GetKeyboardState(NULL);
+            glm::vec3 movement{ 0.0f };
+             
+            // SDL3 uses scancodes for keyboard polling
+            if (keyStates[SDL_SCANCODE_D]) movement.x += 1.0f;
+            if (keyStates[SDL_SCANCODE_A]) movement.x -= 1.0f;
+            if (keyStates[SDL_SCANCODE_S]) movement.z += 1.0f;
+            if (keyStates[SDL_SCANCODE_W]) movement.z -= 1.0f;
+            
+
+
+            glm::normalize(movement);
+            movement.y += keyStates[SDL_SCANCODE_Q];
+            movement.y -= keyStates[SDL_SCANCODE_E];
+
+
+            glm::vec3 camPos = m_Camera.GetPosition();
+            camPos += glm::vec3(0.0f, 1.0f, 0.0f) * movement.y * m_Camera.MovementSpeed * deltaTime;
+            movement.y = 0;
+
+            glm::quat camQuat = m_Camera.GetQuatRotation();
+            camPos += camQuat * (movement * glm::vec3(m_Camera.MovementSpeed * deltaTime));
+
+
+            m_Camera.SetPosition(camPos);
+
+            float camFov = m_Camera.GetFOV() + scroll * m_Camera.ZoomSpeed;
+            m_Camera.SetFOV(camFov);
+
+            glm::vec3 camRot = m_Camera.GetRotation();
+            std::cout << "Camera Rot: " << camRot.x << ", " << camRot.y << ", " << camRot.z << "\n";
+
         }
 
         if (updateSwapchain)

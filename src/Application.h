@@ -1,4 +1,6 @@
 #pragma once
+#include "Camera/EditorCamera.h"
+
 
 #include <glm/glm.hpp>
 #include <vma/vk_mem_alloc.h>
@@ -108,4 +110,6 @@ private:
     Slang::ComPtr<slang::IGlobalSession> slangGlobalSession;
 
     uint32_t frameIndex{ 0 };
+
+    EditorCamera m_Camera;
 };
