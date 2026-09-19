@@ -1206,7 +1206,7 @@ void Application::MainLoop()
             }
             // Camera
             if (event.type == SDL_EVENT_MOUSE_WHEEL) {
-                scroll += static_cast<float>(event.wheel.y);
+                scroll += static_cast<float>(-event.wheel.y);
             }
 
 
@@ -1232,12 +1232,23 @@ void Application::MainLoop()
                     objectRotations[shaderData.selected].x -= (float)event.motion.yrel  * deltaTime;
                     objectRotations[shaderData.selected].y += (float)event.motion.xrel  * deltaTime;
                 }
+                if (event.button.button == SDL_BUTTON_RIGHT)
+                {
+                    if (!SDL_SetWindowRelativeMouseMode(window, true)) {
+                        SDL_Log("Error enabling relative mouse mode: %s", SDL_GetError());
+                    }
+                }
             }
 
 
             // Select active model instance
             if (event.type == SDL_EVENT_KEY_DOWN) {
-               
+                if (event.key.key == SDLK_ESCAPE)
+                {
+                    if (!SDL_SetWindowRelativeMouseMode(window, false)) {
+                        SDL_Log("Error enabling relative mouse mode: %s", SDL_GetError());
+                    }
+                }
 
                 if (event.key.key == SDLK_PLUS || event.key.key == SDLK_KP_PLUS) {
                     shaderData.selected = (shaderData.selected < 2) ? shaderData.selected + 1 : 0;
@@ -1258,7 +1269,7 @@ void Application::MainLoop()
         {
             const bool* keyStates = SDL_GetKeyboardState(NULL);
             glm::vec3 movement{ 0.0f };
-
+             
             // SDL3 uses scancodes for keyboard polling
             if (keyStates[SDL_SCANCODE_D]) movement.x += 1.0f;
             if (keyStates[SDL_SCANCODE_A]) movement.x -= 1.0f;
@@ -1282,7 +1293,7 @@ void Application::MainLoop()
 
             m_Camera.SetPosition(camPos);
 
-            float camFov = m_Camera.GetFOV() + scroll * m_Camera.ZoomSpeed * deltaTime;
+            float camFov = m_Camera.GetFOV() + scroll * m_Camera.ZoomSpeed;
             m_Camera.SetFOV(camFov);
 
             glm::vec3 camRot = m_Camera.GetRotation();
