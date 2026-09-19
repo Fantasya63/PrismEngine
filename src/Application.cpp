@@ -156,6 +156,10 @@ void Application::InitSDL()
     );
     assert(window != nullptr);
 
+    if (!SDL_SetWindowRelativeMouseMode(window, true)) {
+        SDL_Log("Error enabling relative mouse mode: %s", SDL_GetError());
+    }
+
 }
 
 
@@ -1211,6 +1215,18 @@ void Application::MainLoop()
             // Rotate the selected object with mouse drag
             if (event.type == SDL_EVENT_MOUSE_MOTION)
             {
+                // Camera
+                {
+                    glm::vec3 camRot = m_Camera.GetRotation();
+                    camRot.x += event.motion.yrel * 0.01f;
+                    camRot.x = glm::clamp(camRot.x, glm::radians(-88.0f), glm::radians(88.0f));
+
+                    float mouseX = -event.motion.xrel * m_Camera.LookSensitivity;
+                    camRot.y += mouseX; 
+
+                    m_Camera.SetRotation(camRot);
+                }
+
                 if (event.button.button == SDL_BUTTON_LEFT)
                 {
                     objectRotations[shaderData.selected].x -= (float)event.motion.yrel  * deltaTime;
@@ -1248,17 +1264,30 @@ void Application::MainLoop()
             if (keyStates[SDL_SCANCODE_A]) movement.x -= 1.0f;
             if (keyStates[SDL_SCANCODE_S]) movement.z += 1.0f;
             if (keyStates[SDL_SCANCODE_W]) movement.z -= 1.0f;
+            
+
+
+            glm::normalize(movement);
+            movement.y += keyStates[SDL_SCANCODE_Q];
+            movement.y -= keyStates[SDL_SCANCODE_E];
+
+
+            glm::vec3 camPos = m_Camera.GetPosition();
+            camPos += glm::vec3(0.0f, 1.0f, 0.0f) * movement.y * m_Camera.MovementSpeed * deltaTime;
+            movement.y = 0;
+
+            glm::quat camQuat = m_Camera.GetQuatRotation();
+            camPos += camQuat * (movement * glm::vec3(m_Camera.MovementSpeed * deltaTime));
+
+
+            m_Camera.SetPosition(camPos);
 
             float camFov = m_Camera.GetFOV() + scroll * m_Camera.ZoomSpeed * deltaTime;
             m_Camera.SetFOV(camFov);
 
-            glm::normalize(movement);
-            glm::vec3 camPos = m_Camera.GetPosition();
-            camPos += movement * glm::vec3(m_Camera.MovementSpeed * deltaTime);
+            glm::vec3 camRot = m_Camera.GetRotation();
+            std::cout << "Camera Rot: " << camRot.x << ", " << camRot.y << ", " << camRot.z << "\n";
 
-            m_Camera.SetPosition(camPos);
-
-            std::cout << "Delta Time: " << deltaTime << "\n";
         }
 
         if (updateSwapchain)

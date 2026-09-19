@@ -1,8 +1,7 @@
 #include "EditorCamera.h"
 
-#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtx/quaternion.hpp>
+
 
 EditorCamera::EditorCamera(const EditorCamCreateInfo& createInfo)
 	: m_Position( 0.0f ),
@@ -29,6 +28,12 @@ void EditorCamera::SetPosition(glm::vec3& pos)
 void EditorCamera::SetRotation(glm::vec3& rot)
 {
 	m_Rotation = rot;
+	CalculateView();
+}
+
+void EditorCamera::SetQuatRotation(glm::quat rot)
+{
+	m_Rotation = glm::eulerAngles(rot);
 	CalculateView();
 }
 
@@ -63,6 +68,11 @@ glm::vec3 EditorCamera::GetRotation() const
 	return m_Rotation;
 }
 
+glm::quat EditorCamera::GetQuatRotation() const
+{
+	return glm::quat(m_Rotation);
+}
+
 float EditorCamera::GetNearClip() const
 {
 	return m_Near;
@@ -90,27 +100,29 @@ glm::mat4 EditorCamera::GetViewMatrix() const
 
 glm::vec3 EditorCamera::GetUpDirection() const
 {
-	glm::quat rot(m_Rotation);
-	return rot * glm::vec3( 0.0f, 1.0f, 0.0f);
+	return m_RotQuat * glm::vec3( 0.0f, 1.0f, 0.0f);
 }
 
 glm::vec3 EditorCamera::GetRightDirection() const
 {
-	glm::quat rot(m_Rotation);
-	return rot * glm::vec3(1.0f, 0.0f, 0.0f);
+	return m_RotQuat * glm::vec3(1.0f, 0.0f, 0.0f);
 }
 
 glm::vec3 EditorCamera::GetForwardDirection() const
 {
-	glm::quat rot(m_Rotation);
-	return rot * glm::vec3(0.0f, 0.0f, -1.0f);
+	return m_RotQuat * glm::vec3(0.0f, 0.0f, -1.0f);
 }
 
 
 void EditorCamera::CalculateView()
 {
-	glm::quat rot(m_Rotation);
-	m_ViewMatrix = glm::translate(glm::mat4(1.0f), m_Position) * glm::toMat4(rot);
+	glm::quat rotX = glm::angleAxis(m_Rotation.x, glm::vec3(1.0f, 0.0f, 0.0f));
+	glm::quat rotY = glm::angleAxis(m_Rotation.y, glm::vec3(0.0f, 1.0f, 0.0f));
+	glm::quat rotZ = glm::angleAxis(m_Rotation.z, glm::vec3(0.0f, 0.0f, 1.0f));
+
+	m_RotQuat = rotZ * rotY * rotX;
+
+	m_ViewMatrix = glm::translate(glm::mat4(1.0f), m_Position) * glm::toMat4(m_RotQuat);
 	m_ViewMatrix = glm::inverse(m_ViewMatrix);
 }
 

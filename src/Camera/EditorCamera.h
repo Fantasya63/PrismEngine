@@ -1,5 +1,8 @@
 #pragma once
+
 #include <glm/glm.hpp>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/quaternion.hpp>
 
 class EditorCamera
 {
@@ -18,12 +21,15 @@ public:
 
 	void SetPosition(glm::vec3& pos);
 	void SetRotation(glm::vec3& rot);
+	void SetQuatRotation(glm::quat rot);
 	void SetNearClip(float nearClip);
 	void SetFarClip(float farClip);
 	void SetFOV(float fov);
 
 	glm::vec3 GetPosition() const;
 	glm::vec3 GetRotation() const;
+	glm::quat GetQuatRotation() const;
+
 	float GetNearClip() const;
 	float GetFarClip() const;
 	float GetFOV() const;
@@ -37,6 +43,7 @@ public:
 
 	float ZoomSpeed = 10.0f;
 	float MovementSpeed = 2.0f;
+	float LookSensitivity = 0.005f;
 
 private:
 	void CalculateView();
@@ -47,7 +54,7 @@ private:
 
 	glm::vec3 m_Position { 0.0f, 0.0f, 0.0f };
 	glm::vec3 m_Rotation{ 0.0f, 0.0f, 0.0f };
-	
+	glm::quat m_RotQuat;
 
 	float m_Near = 0.01f;
 	float m_Far = 1000.0f;
