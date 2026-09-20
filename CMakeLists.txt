@@ -31,7 +31,6 @@ FetchContent_Declare(
 )
 
 set(KTX_FEATURE_STATIC_LIB ON CACHE BOOL "" FORCE)
-
 set( KTX_FEATURE_DOC OFF CACHE BOOL "" FORCE)
 set( KTX_FEATURE_JNI OFF CACHE BOOL "" FORCE)
 set( KTX_FEATURE_PY OFF CACHE BOOL "" FORCE)
@@ -111,7 +110,9 @@ add_executable(PrismEngine
     src/main.cpp
     src/Application.cpp
     src/Camera/EditorCamera.cpp
- "src/Camera/Camera.h")
+    "src/Camera/Camera.h"
+    "vendor/tinygltf/tiny_gltf_v3.c"
+)
 
 if (MSVC)
     target_compile_options(PrismEngine PRIVATE /std:c++latest)
@@ -126,7 +127,7 @@ target_include_directories(PrismEngine PRIVATE
     ${Vulkan_INCLUDE_DIRS}
     ${ktx_SOURCE_DIR}/include
     ${ktx_SOURCE_DIR}/other_include
-    
+    "vendor/tinygltf"
 )
 
 target_link_libraries(PrismEngine PRIVATE 
