@@ -4,12 +4,6 @@ project(PrismEngine LANGUAGES C CXX)
 include(FetchContent)
 
 
-FetchContent_Declare(
-    SDL3
-    GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-    GIT_TAG        release-3.2.0  # Pins to a stable release
-    GIT_SHALLOW    ON
-)
 
 # Configure SDL3 options before bringing it in
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE) # Force static build
@@ -19,26 +13,15 @@ set(SDL_TEST OFF CACHE BOOL "" FORCE)          # Disable unit tests to speed up 
 set(SDL_TESTS OFF CACHE BOOL "" FORCE)         # Disable SDL3 test executables
 set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)  # Disable SDL3 test support library
 
-FetchContent_MakeAvailable(SDL3)
-
-
-# KTX
 FetchContent_Declare(
-    ktx
-    GIT_REPOSITORY  https://github.com/KhronosGroup/KTX-Software.git
-    GIT_TAG         v4.4.2
-    GIT_SHALLOW     ON
+    SDL3
+    GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+    GIT_TAG        release-3.2.0  # Pins to a stable release
+    GIT_SHALLOW    ON
 )
 
-set(KTX_FEATURE_STATIC_LIB ON CACHE BOOL "" FORCE)
-set( KTX_FEATURE_DOC OFF CACHE BOOL "" FORCE)
-set( KTX_FEATURE_JNI OFF CACHE BOOL "" FORCE)
-set( KTX_FEATURE_PY OFF CACHE BOOL "" FORCE)
-set( KTX_FEATURE_TESTS OFF CACHE BOOL "" FORCE)
-set( KTX_FEATURE_TOOLS_CTS OFF CACHE BOOL "" FORCE)
-set( KTX_FEATURE_JS OFF CACHE BOOL "" FORCE)
-set( KTX_FEATURE_TOOLS OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(KTX)
+FetchContent_MakeAvailable(SDL3)
+
 
 # GLM
 FetchContent_Declare(
@@ -48,6 +31,38 @@ FetchContent_Declare(
     GIT_SHALLOW    ON
 )
 FetchContent_MakeAvailable(glm)
+
+# Inform CMake and IDEs that glm::glm is an EXTERNAL/SYSTEM header directory.
+# This prevents IntelliSense from treating GLM internal files as project symbols.
+if(TARGET glm)
+    get_target_property(GLM_INC glm INTERFACE_INCLUDE_DIRECTORIES)
+    set_target_properties(glm PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${GLM_INC}")
+endif()
+
+
+# KTX
+set(KTX_FEATURE_STATIC_LIB ON CACHE BOOL "" FORCE)
+set( KTX_FEATURE_DOC OFF CACHE BOOL "" FORCE)
+set( KTX_FEATURE_JNI OFF CACHE BOOL "" FORCE)
+set( KTX_FEATURE_PY OFF CACHE BOOL "" FORCE)
+set( KTX_FEATURE_TESTS OFF CACHE BOOL "" FORCE)
+set( KTX_FEATURE_TOOLS_CTS OFF CACHE BOOL "" FORCE)
+set( KTX_FEATURE_JS OFF CACHE BOOL "" FORCE)
+set( KTX_FEATURE_TOOLS OFF CACHE BOOL "" FORCE)
+
+# Tell KTX to use system/pre-found GLM rather than its internal submodules
+set(KTX_USE_SYSTEM_GLM ON CACHE BOOL "" FORCE)
+
+FetchContent_Declare(
+    ktx
+    GIT_REPOSITORY  https://github.com/KhronosGroup/KTX-Software.git
+    GIT_TAG         v4.4.2
+    GIT_SHALLOW     ON
+)
+
+
+FetchContent_MakeAvailable(ktx)
+
 
 
 # VULKAN
@@ -108,11 +123,11 @@ target_compile_definitions(VulkanCppModule
 
 add_executable(PrismEngine
     src/main.cpp
-    src/Application.cpp
-    src/Camera/EditorCamera.cpp
+    "src/Application.cpp"
+    "src/Camera/EditorCamera.cpp"
     "src/Camera/Camera.h"
     "vendor/tinygltf/tiny_gltf_v3.c"
-)
+    "src/AssetManager/AssetManager.cpp" "src/Utils.cpp")
 
 if (MSVC)
     target_compile_options(PrismEngine PRIVATE /std:c++latest)
@@ -121,6 +136,7 @@ endif()
 set_target_properties(PrismEngine PROPERTIES CXX_STANDARD 20)
 target_compile_definitions(PrismEngine PRIVATE VULKAN_HPP_NO_EXCEPTIONS)
 target_compile_definitions(PrismEngine PRIVATE "VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS")
+target_compile_definitions(PrismEngine PRIVATE TINYGLTF3_ENABLE_FS)
 
 # Expose KTX and local headers cleanly
 target_include_directories(PrismEngine PRIVATE
@@ -128,6 +144,7 @@ target_include_directories(PrismEngine PRIVATE
     ${ktx_SOURCE_DIR}/include
     ${ktx_SOURCE_DIR}/other_include
     "vendor/tinygltf"
+    "src/"
 )
 
 target_link_libraries(PrismEngine PRIVATE 
