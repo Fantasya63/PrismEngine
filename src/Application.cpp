@@ -430,53 +430,10 @@ void Application::InitVulkan()
 
     }
 
-    
-    
-    
-
-    
-    
-
-   
-//    /* tinyobj::attrib_t tinyObjAttrib;
-//     std::vector<tinyobj::shape_t> shapes;
-//     std::vector<tinyobj::material_t> materials;
-//     chk(tinyobj::LoadObj(&tinyObjAttrib, &shapes, &materials, nullptr, nullptr, "asses/suzanne.obj"));*/
-
-//     //indexCount = {shapes[0].mesh.indices.size()};
-    /*indexCount = 3;
-    std::vector<MeshVertex> vertices{};
-    std::vector<meshIndex_t> indices{};*/
-
     Mesh modelMesh;
-    AssetManager::LoadModel("assets/models/characters/monkey.glb", modelMesh);
+    AssetManager::LoadModel("assets/models/properties/Helmet.glb", modelMesh);
     std::cout << "Monkey Mesh Total Vertices: " << modelMesh.Vertices.size() << std::endl;
     indexCount = modelMesh.Indices.size();
-
-  /*  {
-        MeshVertex v1 = {
-            .Position {-0.5f, 0.5f, 0.0f},
-            .Normal {0.0f, 0.0f, 1.0f},
-            .UV {1.0f, 0.0f}
-        };
-        MeshVertex v2 = {
-            .Position {0.0f, -0.5f, 0.0f},
-            .Normal {0.0f, 0.0f, 1.0f},
-            .UV {1.0f, 0.0f}
-        };
-        MeshVertex v3 = {
-            .Position {0.5f, 0.5f, 0.0f},
-            .Normal {0.0f, 0.0f, 1.0f},
-            .UV {1.0f, 0.0f}
-        };
-        vertices.push_back(v1);
-        vertices.push_back(v2);
-        vertices.push_back(v3);
-
-        indices.push_back(0);
-        indices.push_back(1);
-        indices.push_back(2);
-    }*/
 
 
     // Upload model data to gpu
@@ -1030,7 +987,7 @@ void Application::MainLoop()
             .imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
             .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
             .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-            .clearValue { .color = {1.0f, 0.0f, 0.0f, 1.0f,}}
+            .clearValue { .color = {0.0f, 0.0f, 0.8f, 1.0f,}}
         };
 
         VkRenderingAttachmentInfo depthAttachmentInfo {
@@ -1187,12 +1144,7 @@ void Application::MainLoop()
                     objectRotations[shaderData.selected].x -= (float)event.motion.yrel  * deltaTime;
                     objectRotations[shaderData.selected].y += (float)event.motion.xrel  * deltaTime;
                 }
-                if (event.button.button == SDL_BUTTON_RIGHT)
-                {
-                    if (!SDL_SetWindowRelativeMouseMode(window, true)) {
-                        SDL_Log("Error enabling relative mouse mode: %s", SDL_GetError());
-                    }
-                }
+               
             }
 
 
@@ -1204,6 +1156,7 @@ void Application::MainLoop()
                         SDL_Log("Error enabling relative mouse mode: %s", SDL_GetError());
                     }
                 }
+               
 
                 if (event.key.key == SDLK_PLUS || event.key.key == SDLK_KP_PLUS) {
                     shaderData.selected = (shaderData.selected < 2) ? shaderData.selected + 1 : 0;
@@ -1212,6 +1165,13 @@ void Application::MainLoop()
                     shaderData.selected = (shaderData.selected > 0) ? shaderData.selected - 1 : 2;
                 }
 
+            }
+
+            if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_RIGHT)
+            {
+                if (!SDL_SetWindowRelativeMouseMode(window, true)) {
+                    SDL_Log("Error enabling relative mouse mode: %s", SDL_GetError());
+                }
             }
 
             // Window resize
@@ -1237,13 +1197,15 @@ void Application::MainLoop()
             movement.y += keyStates[SDL_SCANCODE_Q];
             movement.y -= keyStates[SDL_SCANCODE_E];
 
+            float speed_modifier = 1.0f;
+            if (keyStates[SDL_SCANCODE_LSHIFT]) speed_modifier = 0.1f;
 
             glm::vec3 camPos = m_Camera.GetPosition();
-            camPos += glm::vec3(0.0f, 1.0f, 0.0f) * movement.y * m_Camera.MovementSpeed * deltaTime;
+            camPos += glm::vec3(0.0f, 1.0f, 0.0f) * movement.y * m_Camera.MovementSpeed * speed_modifier * deltaTime;
             movement.y = 0;
 
             glm::quat camQuat = m_Camera.GetQuatRotation();
-            camPos += camQuat * (movement * glm::vec3(m_Camera.MovementSpeed * deltaTime));
+            camPos += camQuat * (movement * glm::vec3(m_Camera.MovementSpeed * speed_modifier  * deltaTime));
 
 
             m_Camera.SetPosition(camPos);

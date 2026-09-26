@@ -157,3 +157,11 @@ target_link_libraries(PrismEngine PRIVATE
 )
 
 
+add_custom_command(
+    TARGET PrismEngine POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets"
+        "$<TARGET_FILE_DIR:PrismEngine>/assets"
+    COMMENT "Copying assets to executable directory..."
+    VERBATIM
+)

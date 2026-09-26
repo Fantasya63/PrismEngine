@@ -7,7 +7,7 @@
 import vulkan_hpp;
 #endif
 
-typedef uint16_t meshIndex_t;
+typedef uint32_t meshIndex_t;
 
 // Compile-time helper function
 constexpr VkIndexType getVkIndexType() {
