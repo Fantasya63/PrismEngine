@@ -127,7 +127,8 @@ add_executable(PrismEngine
     "src/Camera/EditorCamera.cpp"
     "src/Camera/Camera.h"
     "vendor/tinygltf/tiny_gltf_v3.c"
-    "src/AssetManager/AssetManager.cpp" "src/Utils.cpp")
+    "src/AssetManager/AssetManager.cpp"
+    "src/Utils.cpp")
 
 if (MSVC)
     target_compile_options(PrismEngine PRIVATE /std:c++latest)

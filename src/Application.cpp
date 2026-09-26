@@ -4,7 +4,7 @@
 
 #include "Application.h"
 #include "AssetManager/AssetManager.h"
-#include "utils.h"
+#include "Utils.h"
 
 #include <filesystem>
 #include <iostream>
