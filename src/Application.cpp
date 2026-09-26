@@ -3,7 +3,8 @@
 #include <volk/volk.h>
 
 #include "Application.h"
-#include "utils.h"
+#include "AssetManager/AssetManager.h"
+#include "Utils.h"
 
 #include <filesystem>
 #include <iostream>
@@ -34,44 +35,6 @@ import vulkan_hpp;
 #include <type_traits>
 
 
-typedef uint16_t meshIndex_t; 
-
-// Compile-time helper function
-constexpr VkIndexType getVkIndexType() {
-    static_assert(
-        std::is_same_v<meshIndex_t, uint16_t> || 
-        std::is_same_v<meshIndex_t, uint32_t> || 
-        std::is_same_v<meshIndex_t, uint8_t>, 
-        "meshIndex_t must be uint8_t, uint16_t, or uint32_t for Vulkan index buffers!"
-    );
-
-    if constexpr (std::is_same_v<meshIndex_t, uint16_t>) {
-        return VK_INDEX_TYPE_UINT16;
-    } else if constexpr (std::is_same_v<meshIndex_t, uint32_t>) {
-        return VK_INDEX_TYPE_UINT32;
-    } else if constexpr (std::is_same_v<meshIndex_t, uint8_t>) {
-        // Requires VK_EXT_index_type_uint8 extension
-        return VK_INDEX_TYPE_UINT8_EXT;
-    }
-}
-
-constexpr VkIndexType meshIndexVkType = getVkIndexType();
-
-struct CameraData {
-    glm::vec3 Position { 0.0f, 0.0f, 3.0f };
-    float FOV { 45.0f };
-    float Near = { 0.1f };
-    float Far = { 100.0f };
-};
-
-
-struct Vertex {
-    glm::vec3 pos;
-    glm::vec3 normal;
-    glm::vec2 uv;
-};
-
-
 namespace {
     SDL_Window* window;
 
@@ -80,8 +43,6 @@ namespace {
     bool updateSwapchain{ false };
     uint32_t imageIndex{ 0 };
 
-    CameraData camData {.FOV = 45.0f, .Near = 0.1f, .Far = 100.0f};
-    
     glm::vec3 objectRotations[3]{};
     VkDeviceSize vertexBufferSize;
     VkDeviceSize indexBufferSize;
@@ -100,9 +61,6 @@ namespace {
 
     std::array<ShaderDataBuffer, maxFramesInFlight> shaderDataBuffers;
     ShaderData  shaderData{};
-
-    
-
 }
 
 
@@ -472,64 +430,15 @@ void Application::InitVulkan()
 
     }
 
-    
-    
-    
+    Mesh modelMesh;
+    AssetManager::LoadModel("assets/models/properties/Helmet.glb", modelMesh);
+    std::cout << "Monkey Mesh Total Vertices: " << modelMesh.Vertices.size() << std::endl;
+    indexCount = modelMesh.Indices.size();
 
-    
-    
-
-   
-//    /* tinyobj::attrib_t tinyObjAttrib;
-//     std::vector<tinyobj::shape_t> shapes;
-//     std::vector<tinyobj::material_t> materials;
-//     chk(tinyobj::LoadObj(&tinyObjAttrib, &shapes, &materials, nullptr, nullptr, "asses/suzanne.obj"));*/
-
-//     //indexCount = {shapes[0].mesh.indices.size()};
-    indexCount = 3;
-    std::vector<Vertex> vertices{};
-    std::vector<meshIndex_t> indices{};
-
-    {
-        Vertex v1 = {
-            .pos {-0.5f, 0.5f, 0.0f},
-            .normal {0.0f, 0.0f, 1.0f},
-            .uv {1.0f, 0.0f}
-        };
-        Vertex v2 = {
-            .pos {0.0f, -0.5f, 0.0f},
-            .normal {0.0f, 0.0f, 1.0f},
-            .uv {1.0f, 0.0f}
-        };
-        Vertex v3 = {
-            .pos {0.5f, 0.5f, 0.0f},
-            .normal {0.0f, 0.0f, 1.0f},
-            .uv {1.0f, 0.0f}
-        };
-        vertices.push_back(v1);
-        vertices.push_back(v2);
-        vertices.push_back(v3);
-
-        indices.push_back(0);
-        indices.push_back(1);
-        indices.push_back(2);
-    }
-
-   /* for (auto& index : shapes[0].mesh.indices)
-    {
-        Vertex v {
-            .pos = { tinyObjAttrib.vertices[index.vertex_index * 3], -tinyObjAttrib.vertices[index.vertex_index * 3 + 1], tinyObjAttrib.vertices[index.vertex_index * 3 + 2] },
-            .normal = { tinyObjAttrib.normals[index.normal_index * 3], -tinyObjAttrib.normals[index.normal_index * 3 + 1], tinyObjAttrib.normals[index.normal_index * 3 + 2]},
-            .uv = { tinyObjAttrib.texcoords[index.texcoord_index * 2], 1.0f - tinyObjAttrib.texcoords[index.texcoord_index * 2 + 1]}
-        };
-
-        vertices.push_back(v);
-        indices.push_back(static_cast<meshIndex_t>(indices.size()));
-    }*/
 
     // Upload model data to gpu
-    vertexBufferSize =  sizeof(Vertex) * vertices.size() ;
-    indexBufferSize = sizeof(meshIndex_t) * indices.size();
+    vertexBufferSize =  sizeof(MeshVertex) * modelMesh.Vertices.size();
+    indexBufferSize = sizeof(meshIndex_t) * modelMesh.Indices.size();
     VkBufferCreateInfo modelBufferCreateInfo {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size = vertexBufferSize + indexBufferSize,
@@ -544,8 +453,8 @@ void Application::InitVulkan()
     VmaAllocationInfo vertexBufferAllocInfo{};
     chk(vmaCreateBuffer(vkAllocator, &modelBufferCreateInfo, &vertexBufferAllocCreateInfo, &modelVBuffer, &modelVBufferAllocation, &vertexBufferAllocInfo));
 
-    memcpy(vertexBufferAllocInfo.pMappedData, vertices.data(), vertexBufferSize);
-    memcpy(((char*)vertexBufferAllocInfo.pMappedData) + vertexBufferSize, indices.data(), indexBufferSize);
+    memcpy(vertexBufferAllocInfo.pMappedData, modelMesh.Vertices.data(), vertexBufferSize);
+    memcpy(((char*)vertexBufferAllocInfo.pMappedData) + vertexBufferSize, modelMesh.Indices.data(), indexBufferSize);
 
     // Allocate Buffers for ping pong buffers for frames in flight
     for (uint32_t i = 0; i < maxFramesInFlight; i++)
@@ -877,6 +786,7 @@ void Application::InitVulkan()
    
     chk(vkCreateShaderModule(vkDevice, &shaderModuleCI, nullptr, &shaderModule));
 
+     
     VkPushConstantRange pushConstantRange {
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
         .size = sizeof(VkDeviceAddress)
@@ -892,14 +802,14 @@ void Application::InitVulkan()
 
     VkVertexInputBindingDescription vertexInputBindingDesc {
         .binding = 0,
-        .stride = sizeof(Vertex),
+        .stride = sizeof(MeshVertex),
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
     };
 
     std::vector<VkVertexInputAttributeDescription> vertexInputAttributesDesc {
         { .location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT},
-        { .location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, normal)},
-        { .location = 2, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, uv)},
+        { .location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(MeshVertex, Normal)},
+        { .location = 2, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(MeshVertex, UV)},
     };
 
     VkPipelineVertexInputStateCreateInfo pipelineVertexInputStateCI {
@@ -970,7 +880,9 @@ void Application::InitVulkan()
 
     VkPipelineRasterizationStateCreateInfo pipelineRasterizationStateCI {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-        .lineWidth = 1.0f
+        .cullMode = VK_CULL_MODE_BACK_BIT,
+        .frontFace = VK_FRONT_FACE_CLOCKWISE,
+        .lineWidth = 1.0f,
     };
 
     VkPipelineMultisampleStateCreateInfo pipelineMultiSampleStateCI {
@@ -1075,7 +987,7 @@ void Application::MainLoop()
             .imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
             .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
             .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-            .clearValue { .color = {1.0f, 0.0f, 0.0f, 1.0f,}}
+            .clearValue { .color = {0.0f, 0.0f, 0.8f, 1.0f,}}
         };
 
         VkRenderingAttachmentInfo depthAttachmentInfo {
@@ -1116,7 +1028,7 @@ void Application::MainLoop()
         VkDeviceSize vOffset { 0 };
         vkCmdBindDescriptorSets ( commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSetTex, 0, nullptr);
         vkCmdBindVertexBuffers (commandBuffer, 0, 1, &modelVBuffer, &vOffset);
-        vkCmdBindIndexBuffer(commandBuffer, modelVBuffer, vertexBufferSize,  meshIndexVkType);
+        vkCmdBindIndexBuffer(commandBuffer, modelVBuffer, vertexBufferSize,  getVkIndexType());
 
         vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &shaderDataBuffers[frameIndex].deviceAddress);
 
@@ -1232,12 +1144,7 @@ void Application::MainLoop()
                     objectRotations[shaderData.selected].x -= (float)event.motion.yrel  * deltaTime;
                     objectRotations[shaderData.selected].y += (float)event.motion.xrel  * deltaTime;
                 }
-                if (event.button.button == SDL_BUTTON_RIGHT)
-                {
-                    if (!SDL_SetWindowRelativeMouseMode(window, true)) {
-                        SDL_Log("Error enabling relative mouse mode: %s", SDL_GetError());
-                    }
-                }
+               
             }
 
 
@@ -1249,6 +1156,7 @@ void Application::MainLoop()
                         SDL_Log("Error enabling relative mouse mode: %s", SDL_GetError());
                     }
                 }
+               
 
                 if (event.key.key == SDLK_PLUS || event.key.key == SDLK_KP_PLUS) {
                     shaderData.selected = (shaderData.selected < 2) ? shaderData.selected + 1 : 0;
@@ -1257,6 +1165,13 @@ void Application::MainLoop()
                     shaderData.selected = (shaderData.selected > 0) ? shaderData.selected - 1 : 2;
                 }
 
+            }
+
+            if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_RIGHT)
+            {
+                if (!SDL_SetWindowRelativeMouseMode(window, true)) {
+                    SDL_Log("Error enabling relative mouse mode: %s", SDL_GetError());
+                }
             }
 
             // Window resize
@@ -1282,13 +1197,15 @@ void Application::MainLoop()
             movement.y += keyStates[SDL_SCANCODE_Q];
             movement.y -= keyStates[SDL_SCANCODE_E];
 
+            float speed_modifier = 1.0f;
+            if (keyStates[SDL_SCANCODE_LSHIFT]) speed_modifier = 0.1f;
 
             glm::vec3 camPos = m_Camera.GetPosition();
-            camPos += glm::vec3(0.0f, 1.0f, 0.0f) * movement.y * m_Camera.MovementSpeed * deltaTime;
+            camPos += glm::vec3(0.0f, 1.0f, 0.0f) * movement.y * m_Camera.MovementSpeed * speed_modifier * deltaTime;
             movement.y = 0;
 
             glm::quat camQuat = m_Camera.GetQuatRotation();
-            camPos += camQuat * (movement * glm::vec3(m_Camera.MovementSpeed * deltaTime));
+            camPos += camQuat * (movement * glm::vec3(m_Camera.MovementSpeed * speed_modifier  * deltaTime));
 
 
             m_Camera.SetPosition(camPos);
@@ -1297,8 +1214,6 @@ void Application::MainLoop()
             m_Camera.SetFOV(camFov);
 
             glm::vec3 camRot = m_Camera.GetRotation();
-            std::cout << "Camera Rot: " << camRot.x << ", " << camRot.y << ", " << camRot.z << "\n";
-
         }
 
         if (updateSwapchain)

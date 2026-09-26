@@ -40,7 +40,7 @@ VSOutput main(VSInput input, uniform ShaderData *pShaderData, uint instanceIndex
     output.InstanceIndex = instanceIndex;
 
     // Calculate View Vectors Required for Lighting
-    output.LightVec = pShaderData.LightPos.xyz - posViewSpace.xyz;
+    output.LightVec = pShaderData->LightPos.xyz - posViewSpace.xyz;
     output.ViewVec = -posViewSpace.xyz;
     return output;
 }
@@ -58,5 +58,5 @@ float4 main(VSOutput input)
 
     // Sample From Texture
     float3 color = textures[NonUniformResourceIndex(input.InstanceIndex)].Sample(input.UV).rgb * input.Factor;
-    return float4(diffuse * color + specular, 1.0);
+    return float4(diffuse + specular, 1.0);
 }
